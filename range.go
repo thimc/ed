@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"text/scanner"
@@ -21,14 +22,14 @@ func (ed *Editor) ConsumeNumber(s *scanner.Scanner, tok *rune) (int, error) {
 	end = s.Position.Offset
 
 	n, err = strconv.Atoi(string(ed.input[start:end]))
-	// log.Printf("ConsumeNumber(): %d\n", n)
+	log.Printf("ConsumeNumber(): %d\n", n)
 	return n, err
 }
 
 func (ed *Editor) Range(s *scanner.Scanner, tok *rune) error {
 	var mod rune
 	if *tok == scanner.EOF {
-		// log.Printf("EOF\n")
+		log.Printf("EOF\n")
 		return nil
 	}
 	if *tok == '.' {
@@ -42,6 +43,19 @@ func (ed *Editor) Range(s *scanner.Scanner, tok *rune) error {
 		case *tok == '$':
 			ed.Dot = len(ed.Lines)
 			*tok = s.Scan()
+		case *tok == '\'':
+			*tok = s.Scan()
+			var mark int = int(byte(*tok)) - 'a'
+			log.Printf("Mark character: %c at index %d\n", *tok, mark)
+			if *tok == scanner.EOF || int(mark) >= len(ed.Mark) {
+				return fmt.Errorf("invalid mark character")
+			}
+			var addr int = ed.Mark[int(mark)]
+			if addr == 0 {
+				return fmt.Errorf("invalid address")
+			}
+			ed.Dot = addr
+			*tok = s.Scan()
 		case *tok == ' ':
 			fallthrough
 		case *tok == '\t':
@@ -52,10 +66,10 @@ func (ed *Editor) Range(s *scanner.Scanner, tok *rune) error {
 			fallthrough
 		case *tok == '^':
 			mod = *tok
-			// log.Printf("Modifier: %c\n", mod)
+			log.Printf("Modifier: %c\n", mod)
 			*tok = s.Scan()
 			if !unicode.IsDigit(*tok) {
-				// log.Printf("Next token is not a number\n")
+				log.Printf("Next token is not a number\n")
 				switch mod {
 				case '^':
 					fallthrough
@@ -77,13 +91,13 @@ func (ed *Editor) Range(s *scanner.Scanner, tok *rune) error {
 				case '^':
 					fallthrough
 				case '-':
-					// log.Printf("Dot (%d) - %d = %d\n", ed.Dot, n, ed.Dot-n)
+					log.Printf("Dot (%d) - %d = %d\n", ed.Dot, n, ed.Dot-n)
 					ed.Dot -= n
 				case '+':
-					// log.Printf("Dot (%d) + %d = %d\n", ed.Dot, n, ed.Dot+n)
+					log.Printf("Dot (%d) + %d = %d\n", ed.Dot, n, ed.Dot+n)
 					ed.Dot += n
 				default:
-					// log.Printf("Dot (%d) = %d\n", ed.Dot, n)
+					log.Printf("Dot (%d) = %d\n", ed.Dot, n)
 					ed.Dot = n
 				}
 				return nil
@@ -135,13 +149,13 @@ func (ed *Editor) DoRange() error {
 			search += string(tok)
 			tok = s.Scan()
 		}
-		// log.Printf("Search %c -> \"%s\"\n", mod, search)
+		log.Printf("Search %c -> \"%s\"\n", mod, search)
 		if search == string(mod) || search == "" {
-			// log.Println("Search is the modifier")
+			log.Println("Search is the modifier")
 			if ed.Search == "" {
 				return fmt.Errorf("no previous pattern")
 			}
-			// log.Printf("Previous search is \"%s\"\n", ed.Search)
+			log.Printf("Previous search is \"%s\"\n", ed.Search)
 			search = ed.Search
 		} else if search[len(search)-1] == byte(mod) {
 			search = search[:len(search)-2]
@@ -156,7 +170,7 @@ func (ed *Editor) DoRange() error {
 					return err
 				}
 				if match {
-					// log.Printf("Line %d (%s) matches the search string!\n", i, ed.Lines[i])
+					log.Printf("Line %d (%s) matches the search string!\n", i, ed.Lines[i])
 					ed.Dot = i + 1
 					modify = true
 					break search
@@ -170,7 +184,7 @@ func (ed *Editor) DoRange() error {
 					return err
 				}
 				if match {
-					// log.Printf("Line %d (%s) matches the search string!\n", i, ed.Lines[i])
+					log.Printf("Line %d (%s) matches the search string!\n", i, ed.Lines[i])
 					ed.Dot = i + 1
 					modify = true
 					break search
@@ -182,7 +196,7 @@ func (ed *Editor) DoRange() error {
 		modify = true
 	}
 
-	// log.Printf("Token: %c\n", tok)
+	log.Printf("Token: %c\n", tok)
 	if err := ed.Range(&s, &tok); err != nil {
 		return err
 	}
@@ -191,23 +205,24 @@ func (ed *Editor) DoRange() error {
 	}
 
 	if tok == ',' {
-		// log.Println("Address 2")
+		log.Println("Address 2")
 		tok = s.Scan()
-		// log.Printf("Token: %c\n", tok)
+		log.Printf("Token: %c\n", tok)
 		ed.Dot = ed.End
 		ed.Range(&s, &tok)
 	}
 	ed.End = ed.Dot
 
-	if ed.Dot-1 < 0 || ed.Start-1 < 0 ||
-		ed.End < ed.Start ||
+	// if ed.Dot-1 < 0 || ed.Start-1 < 0 ||
+	if ed.End < ed.Start ||
 		ed.End > len(ed.Lines) || ed.Start > len(ed.Lines) {
 		return fmt.Errorf("invalid address")
 	}
-	// log.Printf("Dot=%d, Start=%d, End=%d, Token=%c\n", ed.Dot, ed.Start, ed.End, tok)
+
+	log.Printf("Dot=%d, Start=%d, End=%d, Token=%c\n", ed.Dot, ed.Start, ed.End, tok)
 
 	if tok == scanner.EOF {
-		// log.Println("Detected no command, reverts to p on DOT")
+		log.Println("Detected no command, reverts to p on DOT")
 		ed.Start = ed.Dot
 		tok = 'p'
 	}

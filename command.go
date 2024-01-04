@@ -18,7 +18,7 @@ func (ed *Editor) DoCommand() error {
 	var s scanner.Scanner = *ed.s
 	var tok rune = *ed.tok
 
-	// log.Printf("Cmd=%c\n", tok)
+	log.Printf("Cmd='%c'\n", tok)
 	switch tok {
 	case 'a':
 		ed.Dirty = true
@@ -79,7 +79,12 @@ func (ed *Editor) DoCommand() error {
 	case 'j':
 		return fmt.Errorf("not implemented") // TODO join lines
 	case 'k':
-		return fmt.Errorf("not implemented") // TODO mark
+		tok = s.Scan()
+		var mark byte = byte(tok)-'a'
+		if tok == scanner.EOF || s.Peek() != scanner.EOF || int(mark) >= len(ed.Mark) {
+			return fmt.Errorf("invalid command suffix")
+		}
+		ed.Mark[int(mark)] = ed.Dot
 	case 'l':
 		return fmt.Errorf("not implemented") // TODO print lines unambiguously
 	case 'm':
@@ -87,14 +92,17 @@ func (ed *Editor) DoCommand() error {
 	case 'n':
 		fallthrough
 	case 'p':
-		for i := ed.Start - 1; i < ed.End; i++ {
+		for i := ed.Start - 1; i+1 <= ed.End; i++ {
+			if i < 0 {
+				continue
+			}
 			if tok == 'n' {
 				fmt.Fprintf(os.Stdout, "%d\t%s\n", i+1, ed.Lines[i])
 			} else {
 				fmt.Fprintf(os.Stdout, "%s\n", ed.Lines[i])
 			}
-			ed.Dot = i
 		}
+		ed.Dot = ed.End
 	case 'P':
 		if ed.Prompt == 0 {
 			ed.Prompt = DefaultPrompt
@@ -104,7 +112,7 @@ func (ed *Editor) DoCommand() error {
 	case 'q':
 		return fmt.Errorf("not implemented") // TODO quit
 	case 'Q':
-		// log.Println("Quit ed unconditionally")
+		log.Println("Quit ed unconditionally")
 		os.Exit(0)
 	case 'r':
 		return fmt.Errorf("not implemented") // TODO read
@@ -131,6 +139,8 @@ func (ed *Editor) DoCommand() error {
 		fmt.Fprintf(os.Stdout, "%d\n", ed.Dot+1)
 	case '!':
 		return fmt.Errorf("not implemented") // TODO execute
+	default:
+		return fmt.Errorf("unknown command")
 	}
 	return err
 }
