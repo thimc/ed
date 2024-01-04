@@ -35,14 +35,18 @@ func (ed *Editor) DoCommand() error {
 		}
 	case 'c':
 		ed.Dirty = true
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO change
 	case 'd':
 		ed.Dirty = true
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO delete
 	case 'e':
-		return fmt.Errorf("not implemented") // TODO
+		tok = s.Scan()
+		if tok == '!' {
+			return fmt.Errorf("not implemented") // TODO edit the standard output of command
+		}
+		return fmt.Errorf("not implemented") // TODO edit
 	case 'E':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO edit (unconditionally)
 	case 'f':
 		tok = s.Scan()
 		log.Printf("Token=%c\n", tok)
@@ -71,20 +75,24 @@ func (ed *Editor) DoCommand() error {
 	case 'h':
 		fmt.Fprintf(os.Stderr, "%s\n", ed.Error)
 	case 'i':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO insert
 	case 'j':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO join lines
 	case 'k':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO mark
 	case 'l':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO print lines unambiguously
 	case 'm':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO move lines
 	case 'n':
-		return fmt.Errorf("not implemented") // TODO
+		fallthrough
 	case 'p':
 		for i := ed.Start - 1; i < ed.End; i++ {
-			fmt.Fprintf(os.Stdout, "%s\n", ed.Lines[i])
+			if tok == 'n' {
+				fmt.Fprintf(os.Stdout, "%d\t%s\n", i+1, ed.Lines[i])
+			} else {
+				fmt.Fprintf(os.Stdout, "%s\n", ed.Lines[i])
+			}
 			ed.Dot = i
 		}
 	case 'P':
@@ -94,35 +102,35 @@ func (ed *Editor) DoCommand() error {
 			ed.Prompt = 0
 		}
 	case 'q':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO quit
 	case 'Q':
 		// log.Println("Quit ed unconditionally")
 		os.Exit(0)
 	case 'r':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO read
 	case 's':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO substitute
 	case 't':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO transfer
 	case 'u':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO undo
 	case 'v':
 		return fmt.Errorf("not implemented") // TODO
 	case 'V':
 		return fmt.Errorf("not implemented") // TODO
 	case 'w':
 		if s.Peek() == 'q' {
-			return fmt.Errorf("not implemented") // TODO
+			return fmt.Errorf("not implemented") // TODO write quit
 		}
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO write
 	case 'W':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO write
 	case 'z':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO scroll
 	case '=':
-		return fmt.Errorf("not implemented") // TODO
+		fmt.Fprintf(os.Stdout, "%d\n", ed.Dot+1)
 	case '!':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("not implemented") // TODO execute
 	}
 	return err
 }
