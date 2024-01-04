@@ -1,0 +1,28 @@
+ed (pronounced as distinct letters, /ˌiːˈdiː/) is a line editor for
+Unix and Unix-like operating systems. It was one of the first parts
+of the Unix operating system that was developed, in August 1969.
+It remains part of the POSIX and Open Group standards for Unix-based
+operating systems, alongside the more sophisticated full-screen
+editor vi.
+
+The ed text editor was one of the first three key elements of the
+Unix operating system—assembler, editor, and shell—developed by Ken
+Thompson in August 1969 on a PDP-7 at AT&T Bell Labs. Many features
+of ed came from the qed text editor developed at Thompson's alma
+mater University of California, Berkeley. Thompson was very familiar
+with qed, and had reimplemented it on the CTSS and Multics systems.
+Thompson's versions of qed were notable as the first to implement
+regular expressions. Regular expressions are also implemented in
+ed, though their implementation is considerably less general than
+that in qed.
+
+Dennis M. Ritchie produced what Doug McIlroy later described as the
+"definitive" ed, and aspects of ed went on to influence ex, which
+in turn spawned vi. The non-interactive Unix command grep was
+inspired by a common special use of qed and later ed, where the
+command g/re/p performs a global regular expression search and
+prints the lines containing matches. The Unix stream editor, sed
+implemented many of the scripting features of qed that were not
+supported by ed on Unix.
+
+Source: https://en.wikipedia.org/wiki/Ed_(text_editor)
