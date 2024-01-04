@@ -5,11 +5,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"text/scanner"
 )
 
 var (
+	debugFlag    = flag.Bool("d", false, "toggles debug information")
 	promptFlag   = flag.Bool("p", false, "toggles the prompt")
 	suppressFlag = flag.Bool("s", false, "suppress diagnostics")
 )
@@ -82,80 +85,46 @@ func readStdin(prompt rune) ([]byte, error) {
 
 func main() {
 	flag.Parse()
-	// log.SetOutput(ioutil.Discard)
+	if !(*debugFlag) {
+		log.SetOutput(ioutil.Discard)
+	}
 
 	if *promptFlag {
 		ed.Prompt = DefaultPrompt
 	}
 
-	// var args []string = os.Args[1:]
-	// if len(args) == 1 {
-	// 	err := ed.readFile(args[0])
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-	// }
-
-	siz, _ := ed.readFile("test.txt")
-	fmt.Println(siz)
-	test := false
+	var args []string = flag.Args()
+	if len(args) == 1 {
+		log.Printf("Open file %s\n", args[0])
+		siz, err := ed.readFile(args[0])
+		if err != nil {
+			panic(err) // TODO: Do something clever about it
+		}
+		fmt.Fprintf(os.Stderr, "%d\n", siz)
+	}
 
 	for {
-
-		if test {
-
-			tests := [][]byte{
-				[]byte("4"),
-				[]byte("4,+4p"),
-				[]byte("-5,-3p"),
-				[]byte("^2,^1p"),
-				[]byte(";p"),
-			}
-			for i := range tests {
-				ed.input = tests[i]
-				fmt.Printf("Test: \"%s\"\n", string(ed.input))
-				if err := ed.DoRange(); err != nil {
-					if !ed.printErrors {
-						err = DefaultError
-					}
-					fmt.Fprintf(os.Stderr, "%s\n", err)
-					continue
-				}
-				if err := ed.DoCommand(); err != nil {
-					if !ed.printErrors {
-						err = DefaultError
-					}
-					fmt.Fprintf(os.Stderr, "%s\n", err)
-					continue
-				}
-			}
-			break
-		} else {
-
-			var err error
-			ed.input, err = readStdin(ed.Prompt)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s", err)
-				os.Exit(1)
-			}
-			if err := ed.DoRange(); err != nil {
-				ed.Error = err
-				fmt.Fprintf(os.Stderr, "%s\n", err)
-				if ed.printErrors {
-					fmt.Fprintf(os.Stderr, "%s\n", DefaultError)
-				}
-				continue
-			}
-			if err := ed.DoCommand(); err != nil {
-				ed.Error = err
-				fmt.Fprintf(os.Stderr, "%s\n", err)
-				if ed.printErrors {
-					fmt.Fprintf(os.Stderr, "%s\n", DefaultError)
-				}
-				continue
-			}
-
+		var err error
+		ed.input, err = readStdin(ed.Prompt)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s", err)
+			os.Exit(1)
 		}
-
+		if err := ed.DoRange(); err != nil {
+			ed.Error = err
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+			if ed.printErrors {
+				fmt.Fprintf(os.Stderr, "%s\n", DefaultError)
+			}
+			continue
+		}
+		if err := ed.DoCommand(); err != nil {
+			ed.Error = err
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+			if ed.printErrors {
+				fmt.Fprintf(os.Stderr, "%s\n", DefaultError)
+			}
+			continue
+		}
 	}
 }
