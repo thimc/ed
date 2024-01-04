@@ -21,6 +21,7 @@ type Editor struct {
 	Path  string
 	Dirty bool
 	Lines []string
+	Mark  ['z' - 'a']int
 
 	Dot   int
 	Start int
@@ -95,12 +96,15 @@ func main() {
 
 	var args []string = flag.Args()
 	if len(args) == 1 {
-		log.Printf("Open file %s\n", args[0])
 		siz, err := ed.readFile(args[0])
 		if err != nil {
-			panic(err) // TODO: Do something clever about it
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			ed.Error = errors.New("cannot open input file")
+			// 	panic(err) // TODO: Do something clever about it
+		} else {
+			log.Printf("Open file %s\n", args[0])
+			fmt.Fprintf(os.Stderr, "%d\n", siz)
 		}
-		fmt.Fprintf(os.Stderr, "%d\n", siz)
 	}
 
 	for {
