@@ -114,7 +114,7 @@ func (ed *Editor) DoRange() error {
 	var tok rune
 
 	s.Init(bytes.NewReader(ed.input))
-	s.Mode = scanner.ScanChars
+	s.Mode = scanner.ScanRawStrings
 	s.Whitespace ^= scanner.GoWhitespace
 	tok = s.Scan()
 	ed.s = &s

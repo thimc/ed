@@ -139,6 +139,7 @@ func (ed *Editor) DoCommand() error {
 		if tok == scanner.EOF || s.Peek() != scanner.EOF || int(mark) >= len(ed.Mark) {
 			return fmt.Errorf("invalid command suffix")
 		}
+		log.Printf("Mark %d is set to Dot (%d)\n", int(mark), ed.Dot)
 		ed.Mark[int(mark)] = ed.Dot
 	case 'm':
 		var arg string
