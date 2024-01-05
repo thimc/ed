@@ -30,15 +30,15 @@ func (ed *Editor) DoCommand() error {
 			}
 			ed.Lines = append(ed.Lines, "")
 			copy(ed.Lines[ed.Dot:], ed.Lines[ed.Dot:])
-			ed.Dot++
 			ed.Lines[ed.Dot] = line
+			ed.Dot++
 		}
 	case 'c':
 		ed.Dirty = true
 		return fmt.Errorf("not implemented") // TODO change
 	case 'd':
 		ed.Dirty = true
-		return fmt.Errorf("not implemented") // TODO delete
+		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.Dot:]...)
 	case 'e':
 		tok = s.Scan()
 		if tok == '!' {
@@ -75,12 +75,20 @@ func (ed *Editor) DoCommand() error {
 	case 'h':
 		fmt.Fprintf(os.Stderr, "%s\n", ed.Error)
 	case 'i':
-		return fmt.Errorf("not implemented") // TODO insert
+		for {
+			line, _ := ed.ReadInsert()
+			line = line[:len(line)-1]
+			if line == "." {
+				break
+			}
+			ed.Lines = append([]string{line}, ed.Lines...)
+			ed.Dot++
+		}
 	case 'j':
 		return fmt.Errorf("not implemented") // TODO join lines
 	case 'k':
 		tok = s.Scan()
-		var mark byte = byte(tok)-'a'
+		var mark byte = byte(tok) - 'a'
 		if tok == scanner.EOF || s.Peek() != scanner.EOF || int(mark) >= len(ed.Mark) {
 			return fmt.Errorf("invalid command suffix")
 		}
@@ -136,7 +144,7 @@ func (ed *Editor) DoCommand() error {
 	case 'z':
 		return fmt.Errorf("not implemented") // TODO scroll
 	case '=':
-		fmt.Fprintf(os.Stdout, "%d\n", ed.Dot+1)
+		fmt.Fprintf(os.Stdout, "%d\n", len(ed.Lines))
 	case '!':
 		return fmt.Errorf("not implemented") // TODO execute
 	default:

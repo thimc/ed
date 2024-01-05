@@ -100,7 +100,6 @@ func main() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			ed.Error = errors.New("cannot open input file")
-			// 	panic(err) // TODO: Do something clever about it
 		} else {
 			log.Printf("Open file %s\n", args[0])
 			fmt.Fprintf(os.Stderr, "%d\n", siz)
