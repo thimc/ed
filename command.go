@@ -141,7 +141,24 @@ func (ed *Editor) DoCommand() error {
 		}
 		ed.Mark[int(mark)] = ed.Dot
 	case 'm':
-		return fmt.Errorf("not implemented") // TODO move lines
+		var arg string
+		var dst int
+		tok = s.Scan()
+		log.Printf("Destination: %c\n", tok)
+		for tok != scanner.EOF {
+			arg += string(tok)
+			tok = s.Scan()
+		}
+		dst, err = strconv.Atoi(arg)
+		if err != nil {
+			return fmt.Errorf("destination expected")
+		}
+		log.Printf("Destination (arg): %d (%s)\n", dst, arg)
+		lines := make([]string, ed.End-ed.Start+1)
+		copy(lines, ed.Lines[ed.Start-1:ed.End+1])
+		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
+		ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
+		ed.Dot = dst + len(lines)
 	case 'l':
 		fallthrough
 	case 'n':
