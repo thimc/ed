@@ -36,9 +36,6 @@ func (ed *Editor) Range(s *scanner.Scanner, tok *rune) error {
 	}
 	for {
 		switch {
-		case *tok == '.':
-			*tok = s.Scan()
-			return fmt.Errorf("invalid address")
 		case *tok == '$':
 			ed.Dot = len(ed.Lines)
 			*tok = s.Scan()
