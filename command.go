@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 	"text/scanner"
 )
 
@@ -85,7 +87,11 @@ func (ed *Editor) DoCommand() error {
 			ed.Dot++
 		}
 	case 'j':
-		return fmt.Errorf("not implemented") // TODO join lines
+		var joined string = strings.Join(ed.Lines[ed.Start-1:ed.Dot], "")
+		var result []string = append(append([]string{}, ed.Lines[:ed.Start-1]...), joined)
+		ed.Lines = append(result, ed.Lines[ed.End:]...)
+		ed.Dot = ed.Start
+		ed.Dirty = true
 	case 'k':
 		tok = s.Scan()
 		var mark byte = byte(tok) - 'a'
@@ -93,10 +99,10 @@ func (ed *Editor) DoCommand() error {
 			return fmt.Errorf("invalid command suffix")
 		}
 		ed.Mark[int(mark)] = ed.Dot
-	case 'l':
-		return fmt.Errorf("not implemented") // TODO print lines unambiguously
 	case 'm':
 		return fmt.Errorf("not implemented") // TODO move lines
+	case 'l':
+		fallthrough
 	case 'n':
 		fallthrough
 	case 'p':
@@ -104,9 +110,13 @@ func (ed *Editor) DoCommand() error {
 			if i < 0 {
 				continue
 			}
-			if tok == 'n' {
+			switch tok {
+			case 'l':
+				var q string = strconv.QuoteToASCII(ed.Lines[i])
+				fmt.Fprintf(os.Stdout, "%s$\n", q[1:len(q)-1])
+			case 'n':
 				fmt.Fprintf(os.Stdout, "%d\t%s\n", i+1, ed.Lines[i])
-			} else {
+			case 'p':
 				fmt.Fprintf(os.Stdout, "%s\n", ed.Lines[i])
 			}
 		}
@@ -118,9 +128,12 @@ func (ed *Editor) DoCommand() error {
 			ed.Prompt = 0
 		}
 	case 'q':
-		return fmt.Errorf("not implemented") // TODO quit
+		fallthrough
 	case 'Q':
-		log.Println("Quit ed unconditionally")
+		if tok == 'q' && ed.Dirty {
+			ed.Dirty = false
+			return fmt.Errorf("warning: file modified")
+		}
 		os.Exit(0)
 	case 'r':
 		return fmt.Errorf("not implemented") // TODO read
