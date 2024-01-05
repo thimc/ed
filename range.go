@@ -129,7 +129,8 @@ func (ed *Editor) DoRange() error {
 		fallthrough
 	case '%':
 		ed.Start = 1
-		ed.End = len(ed.Lines)
+		ed.Dot = len(ed.Lines)
+		ed.End = ed.Dot
 		tok = s.Scan()
 	case '$':
 		ed.Dot = len(ed.Lines)
