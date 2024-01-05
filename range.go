@@ -73,8 +73,10 @@ func (ed *Editor) Range(s *scanner.Scanner, tok *rune) error {
 				case '^':
 					fallthrough
 				case '-':
+					log.Printf("Dot-- (%d) = %d\n", ed.Dot, ed.Dot-1)
 					ed.Dot--
 				case '+':
+					log.Printf("Dot++ (%d) = %d\n", ed.Dot, ed.Dot+1)
 					ed.Dot--
 				}
 				return nil
@@ -102,8 +104,6 @@ func (ed *Editor) Range(s *scanner.Scanner, tok *rune) error {
 				return nil
 			}
 		default:
-			// return fmt.Errorf("invalid address")
-			// fmt.Printf("Unknown token: %c\n", *tok)
 			return nil
 		}
 	}
