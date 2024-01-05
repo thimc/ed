@@ -81,14 +81,55 @@ func (ed *Editor) DoCommand() error {
 		ed.Dirty = true
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.Dot:]...)
 		ed.Dot = ed.Start
-	case 'e':
-		tok = s.Scan()
-		if tok == '!' {
-			return fmt.Errorf("not implemented") // TODO edit the standard output of command
-		}
-		return fmt.Errorf("not implemented") // TODO edit
 	case 'E':
-		return fmt.Errorf("not implemented") // TODO edit (unconditionally)
+		fallthrough
+	case 'e':
+		var uc bool = (tok == 'E')
+		tok = s.Scan()
+		if tok != ' ' {
+			return fmt.Errorf("unexpected command suffix")
+		}
+		tok = s.Scan()
+		var fname string
+		var cmd bool
+		if tok == '!' {
+			tok = s.Scan()
+			cmd = true
+		}
+		for tok != scanner.EOF {
+			fname += string(tok)
+			tok = s.Scan()
+		}
+		if fname == "" {
+			if ed.Path == "" {
+				return fmt.Errorf("no current filename")
+			}
+			fname = ed.Path
+		}
+		if !uc && ed.Dirty {
+			ed.Dirty = false
+			return fmt.Errorf("warning: file modified")
+		}
+		switch cmd {
+		case true:
+			log.Printf("e command '%s'\n", fname)
+			lines, err := ed.Shell(fname)
+			if err != nil {
+				return fmt.Errorf("0")
+			}
+			var siz int
+			for i := range lines {
+				siz += len(lines[i]) + 1
+			}
+			ed.Lines = lines
+			ed.Dot = len(lines)
+			fmt.Fprintf(os.Stderr, "%d\n", siz)
+		case false:
+			log.Printf("e file '%s'\n", fname)
+			return ed.readFile(fname)
+		}
+	// case 'E':
+	// 	return fmt.Errorf("not implemented") // TODO edit (unconditionally)
 	case 'f':
 		tok = s.Scan()
 		log.Printf("Token=%c\n", tok)
