@@ -5,10 +5,36 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"text/scanner"
 )
+
+func (ed *Editor) Shell(command string) ([]string, error) {
+	var output []string
+	cmd := exec.Command("/bin/sh", "-c", command)
+	stdout, err := cmd.StdoutPipe()
+	defer stdout.Close()
+	if err := cmd.Start(); err != nil {
+		return output, err
+	}
+	if err != nil {
+		return output, err
+	}
+	s := bufio.NewScanner(stdout)
+	s.Split(bufio.ScanLines)
+	for s.Scan() {
+		output = append(output, s.Text())
+	}
+	if err := cmd.Wait(); err != nil {
+		return output, err
+	}
+	if err := s.Err(); err != nil {
+		return output, err
+	}
+	return output, err
+}
 
 func (ed *Editor) ReadInsert() (string, error) {
 	reader := bufio.NewReader(os.Stdin)
@@ -174,7 +200,41 @@ func (ed *Editor) DoCommand() error {
 	case '=':
 		fmt.Fprintf(os.Stdout, "%d\n", len(ed.Lines))
 	case '!':
-		return fmt.Errorf("not implemented") // TODO execute
+		tok = s.Scan()
+		var buf string
+		if tok == scanner.EOF {
+			buf = ed.Cmd
+		} else {
+			for tok != scanner.EOF {
+				buf += string(tok)
+				tok = s.Scan()
+			}
+		}
+		log.Printf("Command (unparsed): '%s'\n", buf)
+		ed.Cmd = buf
+		var cs scanner.Scanner
+		cs.Init(strings.NewReader(buf))
+		cs.Mode = scanner.ScanChars
+		cs.Whitespace ^= scanner.GoWhitespace
+		var cmd string
+		var ctok rune = cs.Scan()
+		for ctok != scanner.EOF {
+			cmd += string(ctok)
+			if ctok != '\\' && cs.Peek() == '%' {
+				ctok = cs.Scan()
+				log.Printf("Replacing %% with '%s'\n", ed.Path)
+				cmd += ed.Path
+			}
+			ctok = cs.Scan()
+		}
+		output, err := ed.Shell(cmd)
+		if err != nil {
+			return err
+		}
+		for i := range output {
+			fmt.Fprintf(os.Stderr, "%s\n", output[i])
+		}
+		fmt.Fprintln(os.Stderr, "!")
 	default:
 		return fmt.Errorf("unknown command")
 	}
