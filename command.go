@@ -23,24 +23,38 @@ func (ed *Editor) DoCommand() error {
 	log.Printf("Cmd='%c'\n", tok)
 	switch tok {
 	case 'a':
-		ed.Dirty = true
 		for {
 			line, _ := ed.ReadInsert()
 			line = line[:len(line)-1]
 			if line == "." {
 				break
 			}
-			ed.Lines = append(ed.Lines, "")
-			copy(ed.Lines[ed.Dot:], ed.Lines[ed.Dot:])
+			if tok == 'a' {
+				ed.Lines = append(ed.Lines, "")
+				copy(ed.Lines[ed.Dot:], ed.Lines[ed.Dot:])
+			}
 			ed.Lines[ed.Dot] = line
 			ed.Dot++
+			ed.Dirty = true
 		}
 	case 'c':
 		ed.Dirty = true
-		return fmt.Errorf("not implemented") // TODO change
+		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.Dot:]...)
+		ed.Dot = ed.Start - 1
+		for {
+			line, _ := ed.ReadInsert()
+			line = line[:len(line)-1]
+			if line == "." {
+				break
+			}
+			ed.Lines = append(ed.Lines[:ed.Dot+1], ed.Lines[ed.Dot:]...)
+			ed.Lines[ed.Dot] = line
+			ed.Dot++
+		}
 	case 'd':
 		ed.Dirty = true
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.Dot:]...)
+		ed.Dot = ed.Start
 	case 'e':
 		tok = s.Scan()
 		if tok == '!' {
@@ -83,7 +97,8 @@ func (ed *Editor) DoCommand() error {
 			if line == "." {
 				break
 			}
-			ed.Lines = append([]string{line}, ed.Lines...)
+			ed.Lines = append(ed.Lines[:ed.Dot], ed.Lines[ed.Dot-1:]...)
+			ed.Lines[ed.Dot-1] = line
 			ed.Dot++
 		}
 	case 'j':
