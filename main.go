@@ -32,6 +32,7 @@ type Editor struct {
 	Search string
 	Error  error
 	Prompt rune
+	Cmd    string
 
 	printErrors bool
 
@@ -64,6 +65,7 @@ func (ed *Editor) readFile(path string) (int64, error) {
 	if err := s.Err(); err != nil {
 		return siz, err
 	}
+	ed.Path = path
 	ed.Dot = len(ed.Lines)
 	ed.Start = 1
 	ed.End = ed.Dot
@@ -113,6 +115,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "%s", err)
 			os.Exit(1)
 		}
+		log.Printf("Read input: '%s'\n", ed.input)
 		if err := ed.DoRange(); err != nil {
 			ed.Error = err
 			fmt.Fprintf(os.Stderr, "%s\n", err)
