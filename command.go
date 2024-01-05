@@ -128,8 +128,6 @@ func (ed *Editor) DoCommand() error {
 			log.Printf("e file '%s'\n", fname)
 			return ed.readFile(fname)
 		}
-	// case 'E':
-	// 	return fmt.Errorf("not implemented") // TODO edit (unconditionally)
 	case 'f':
 		tok = s.Scan()
 		log.Printf("Token=%c\n", tok)
