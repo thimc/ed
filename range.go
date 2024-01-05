@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"log"
@@ -115,7 +114,8 @@ func (ed *Editor) DoRange() error {
 	var tok rune
 
 	s.Init(bytes.NewReader(ed.input))
-	s.Mode = bufio.MaxScanTokenSize
+	s.Mode = scanner.ScanChars
+	s.Whitespace ^= scanner.GoWhitespace
 	tok = s.Scan()
 	ed.s = &s
 	ed.tok = &tok
