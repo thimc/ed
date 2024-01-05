@@ -43,19 +43,19 @@ type Editor struct {
 var (
 	ed Editor
 
-	DefaultError  = errors.New("?")
+	DefaultError  = errors.New("?") // descriptive error message, don't you think?
 	DefaultPrompt = '*'
 )
 
-func (ed *Editor) readFile(path string) (int64, error) {
+func (ed *Editor) readFile(path string) error {
 	var siz int64
 	file, err := os.Open(path)
 	if err != nil {
-		return siz, err
+		return fmt.Errorf("cannot open input file")
 	}
 	stat, err := file.Stat()
 	if err != nil {
-		return siz, err
+		return fmt.Errorf("cannot open input file")
 	}
 	siz = stat.Size()
 	s := bufio.NewScanner(file)
@@ -63,13 +63,14 @@ func (ed *Editor) readFile(path string) (int64, error) {
 		ed.Lines = append(ed.Lines, s.Text())
 	}
 	if err := s.Err(); err != nil {
-		return siz, err
+		return err
 	}
 	ed.Path = path
 	ed.Dot = len(ed.Lines)
 	ed.Start = 1
 	ed.End = ed.Dot
-	return siz, nil
+	fmt.Fprintf(os.Stderr, "%d\n", siz)
+	return nil
 }
 
 func readStdin(prompt rune) ([]byte, error) {
@@ -98,13 +99,10 @@ func main() {
 
 	var args []string = flag.Args()
 	if len(args) == 1 {
-		siz, err := ed.readFile(args[0])
-		if err != nil {
+		if err := ed.readFile(args[0]); err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-			ed.Error = errors.New("cannot open input file")
 		} else {
 			log.Printf("Open file %s\n", args[0])
-			fmt.Fprintf(os.Stderr, "%d\n", siz)
 		}
 	}
 
