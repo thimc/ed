@@ -11,6 +11,29 @@ import (
 	"text/scanner"
 )
 
+func (ed *Editor) Write(path string) error {
+	var err error
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	var siz, start, end int
+	start = ed.Start - 1
+	end = ed.End - 1
+	for i := start; i < end; i++ {
+		var line string = ed.Lines[i]
+		_, err := file.WriteString(line + "\n")
+		if err != nil {
+			return err
+		}
+		siz += len(line) + 1
+	}
+	ed.Dirty = false
+	fmt.Fprintf(os.Stderr, "%d\n", siz)
+	return err
+}
+
 func (ed *Editor) Shell(command string) ([]string, error) {
 	var output []string
 	cmd := exec.Command("/bin/sh", "-c", command)
@@ -43,10 +66,8 @@ func (ed *Editor) ReadInsert() (string, error) {
 
 func (ed *Editor) DoCommand() error {
 	var err error
-	var s scanner.Scanner = *ed.s
 	var tok rune = *ed.tok
 
-	log.Printf("Cmd='%c'\n", tok)
 	switch tok {
 	case 'a':
 		for {
@@ -85,20 +106,20 @@ func (ed *Editor) DoCommand() error {
 		fallthrough
 	case 'e':
 		var uc bool = (tok == 'E')
-		tok = s.Scan()
+		tok = ed.s.Scan()
 		if tok != ' ' {
 			return fmt.Errorf("unexpected command suffix")
 		}
-		tok = s.Scan()
+		tok = ed.s.Scan()
 		var fname string
 		var cmd bool
 		if tok == '!' {
-			tok = s.Scan()
+			tok = ed.s.Scan()
 			cmd = true
 		}
 		for tok != scanner.EOF {
 			fname += string(tok)
-			tok = s.Scan()
+			tok = ed.s.Scan()
 		}
 		if fname == "" {
 			if ed.Path == "" {
@@ -126,10 +147,16 @@ func (ed *Editor) DoCommand() error {
 			fmt.Fprintf(os.Stderr, "%d\n", siz)
 		case false:
 			log.Printf("e file '%s'\n", fname)
-			return ed.readFile(fname)
+			err := ed.readFile(fname)
+			if err != nil {
+				return err
+			}
+			ed.Path = fname
+			log.Printf("Path: '%s'\n", ed.Path)
+			return nil
 		}
 	case 'f':
-		tok = s.Scan()
+		tok = ed.s.Scan()
 		log.Printf("Token=%c\n", tok)
 		if tok == scanner.EOF {
 			if ed.Path == "" {
@@ -140,7 +167,7 @@ func (ed *Editor) DoCommand() error {
 		var filename string
 		for tok != scanner.EOF {
 			filename += string(tok)
-			tok = s.Scan()
+			tok = ed.s.Scan()
 		}
 		if filename == "" {
 			return fmt.Errorf("invalid filename")
@@ -173,9 +200,9 @@ func (ed *Editor) DoCommand() error {
 		ed.Dot = ed.Start
 		ed.Dirty = true
 	case 'k':
-		tok = s.Scan()
+		tok = ed.s.Scan()
 		var mark byte = byte(tok) - 'a'
-		if tok == scanner.EOF || s.Peek() != scanner.EOF || int(mark) >= len(ed.Mark) {
+		if tok == scanner.EOF || ed.s.Peek() != scanner.EOF || int(mark) >= len(ed.Mark) {
 			return fmt.Errorf("invalid command suffix")
 		}
 		log.Printf("Mark %d is set to Dot (%d)\n", int(mark), ed.Dot)
@@ -183,11 +210,11 @@ func (ed *Editor) DoCommand() error {
 	case 'm':
 		var arg string
 		var dst int
-		tok = s.Scan()
+		tok = ed.s.Scan()
 		log.Printf("Destination: %c\n", tok)
 		for tok != scanner.EOF {
 			arg += string(tok)
-			tok = s.Scan()
+			tok = ed.s.Scan()
 		}
 		dst, err = strconv.Atoi(arg)
 		if err != nil {
@@ -204,7 +231,7 @@ func (ed *Editor) DoCommand() error {
 	case 'n':
 		fallthrough
 	case 'p':
-		for i := ed.Start - 1; i+1 <= ed.End; i++ {
+		for i := ed.Start - 1; i < ed.End; i++ {
 			if i < 0 {
 				continue
 			}
@@ -246,10 +273,35 @@ func (ed *Editor) DoCommand() error {
 	case 'V':
 		return fmt.Errorf("not implemented") // TODO
 	case 'w':
-		if s.Peek() == 'q' {
-			return fmt.Errorf("not implemented") // TODO write quit
+		var quit bool
+		tok = ed.s.Scan()
+		log.Printf("Write")
+		if tok == 'q' {
+			tok = ed.s.Scan()
+			log.Printf("Quit=true")
+			quit = true
 		}
-		return fmt.Errorf("not implemented") // TODO write
+		var fname string = ed.Path
+		if tok == scanner.EOF && fname == "" {
+			return fmt.Errorf("no current filename")
+		}
+		if tok == ' ' {
+			tok = ed.s.Scan()
+			fname = ""
+		}
+		for tok != scanner.EOF {
+			fname += string(tok)
+			tok = ed.s.Scan()
+		}
+		if fname == "" {
+			return fmt.Errorf("no current filename")
+		}
+		log.Printf("Filename: '%s'\n", fname)
+		err := ed.Write(fname)
+		if quit {
+			os.Exit(0)
+		}
+		return err
 	case 'W':
 		return fmt.Errorf("not implemented") // TODO write
 	case 'z':
@@ -257,14 +309,14 @@ func (ed *Editor) DoCommand() error {
 	case '=':
 		fmt.Fprintf(os.Stdout, "%d\n", len(ed.Lines))
 	case '!':
-		tok = s.Scan()
+		tok = ed.s.Scan()
 		var buf string
 		if tok == scanner.EOF {
 			buf = ed.Cmd
 		} else {
 			for tok != scanner.EOF {
 				buf += string(tok)
-				tok = s.Scan()
+				tok = ed.s.Scan()
 			}
 		}
 		log.Printf("Command (unparsed): '%s'\n", buf)
