@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"regexp"
@@ -10,219 +9,279 @@ import (
 	"unicode"
 )
 
-func (ed *Editor) ConsumeNumber(s *scanner.Scanner, tok *rune) (int, error) {
+func (ed *Editor) token() rune {
+	return ed.tok
+}
+
+func (ed *Editor) nextToken() {
+	ed.tok = ed.s.Scan()
+}
+
+func (ed *Editor) scanNumber() (int, error) {
 	var n, start, end int
 	var err error
 
-	start = s.Position.Offset
-	for unicode.IsDigit(*tok) {
-		*tok = s.Scan()
+	start = ed.s.Position.Offset
+	for unicode.IsDigit(ed.token()) {
+		ed.nextToken()
 	}
-	end = s.Position.Offset
+	end = ed.s.Position.Offset
 
-	n, err = strconv.Atoi(string(ed.input[start:end]))
-	log.Printf("ConsumeNumber(): %d\n", n)
+	num := string(ed.input[start:end])
+	log.Printf("Convert num: '%s'\n", num)
+	n, err = strconv.Atoi(num)
+	log.Printf("ConsumeNumber(): '%d' err=%t\n", n, err != nil)
 	return n, err
 }
 
-func (ed *Editor) Range(s *scanner.Scanner, tok *rune) error {
+func (ed *Editor) Range() (int, error) {
+	ed.addr = ed.Dot
 	var mod rune
-	if *tok == scanner.EOF {
-		log.Printf("EOF\n")
-		return nil
-	}
-	if *tok == '.' {
-		*tok = s.Scan()
-	}
-	for {
+	var first bool
+
+	for first = true; ; first = false {
+		for {
+			switch ed.token() {
+			case ' ':
+				fallthrough
+			case '\t':
+				fallthrough
+			case '\n':
+				fallthrough
+			case '\r':
+				ed.nextToken()
+				continue
+			}
+			break
+		}
+		log.Printf("Token:'%c' (first=%t)\n", ed.token(), first)
+
 		switch {
-		case *tok == '$':
-			ed.Dot = len(ed.Lines)
-			*tok = s.Scan()
-		case *tok == '\'':
-			*tok = s.Scan()
-			var mark int = int(byte(*tok)) - 'a'
-			log.Printf("Mark character: %c at index %d\n", *tok, mark)
-			if *tok == scanner.EOF || int(mark) >= len(ed.Mark) {
-				return fmt.Errorf("invalid mark character")
+		case ed.token() == '.':
+			fallthrough
+		case ed.token() == '$':
+			if !first {
+				return 0, ErrInvalidAddress
 			}
-			var addr int = ed.Mark[int(mark)]
-			if addr == 0 {
-				return fmt.Errorf("invalid address")
+			if ed.token() == '.' {
+				ed.addr = ed.Dot
+			} else {
+				ed.addr = len(ed.Lines)
 			}
-			ed.Dot = addr
-			*tok = s.Scan()
-		case *tok == ' ':
+			ed.nextToken()
+
+		case ed.token() == '?':
 			fallthrough
-		case *tok == '\t':
-			*tok = s.Scan()
-		case *tok == '+':
+		case ed.token() == '/':
+			var mod rune = ed.token()
+			ed.nextToken()
+			var search string = ed.scanString()
+			if search == string(mod) || search == "" {
+				log.Println("Search with previous pattern")
+				if ed.Search == "" {
+					return 0, ErrNoPrevPattern
+				}
+				log.Printf("Previous search is \"%s\"\n", ed.Search)
+				search = ed.Search
+			} else if search[len(search)-1] == byte(mod) {
+				search = search[:len(search)-1]
+			}
+			log.Printf("Search %c -> \"%s\"\n", mod, search)
+			ed.Search = search
+			var s int = ed.End - 1
+			var e = len(ed.Lines)
+			if mod == '?' {
+				e = 0
+			}
+			ed.dump()
+			fmt.Printf("S: %d, E: %d\n", s, e)
+			for i := s; i != e; {
+				if i < 0 || i > len(ed.Lines) {
+					return 0, ErrNoMatch
+				}
+				match, err := regexp.MatchString(search, ed.Lines[i])
+				if err != nil {
+					return 0, err
+				}
+				if match {
+					log.Printf("Line %d (%s) matches the search string!\n", i, ed.Lines[i])
+					ed.addr = i + 1
+					return ed.addr, nil
+				}
+				if mod == '/' {
+					i++
+				} else {
+					i--
+				}
+			}
+			return 0, ErrNoMatch
+
+		case ed.token() == '\'':
+			ed.nextToken()
+			var buf string = ed.scanString()
+			switch len(buf) {
+			case 1:
+				break
+			case 0:
+				fallthrough
+			default:
+				return 0, ErrInvalidCmdSuffix
+			}
+			var r rune = rune(buf[0])
+			if !unicode.IsLower(r) {
+				return 0, ErrInvalidMark
+			}
+			log.Printf("Mark %c\n", r)
+			var mark int = int(byte(buf[0])) - 'a'
+			if mark >= len(ed.Mark) {
+				return 0, ErrInvalidMark
+			}
+			var maddr int = ed.Mark[mark]
+			log.Printf("Mark %c address %d\n", rune('a'+mark), maddr)
+			if maddr < 1 || maddr > len(ed.Lines) {
+				return 0, ErrInvalidAddress
+			}
+			ed.End = maddr
+			ed.Start = maddr
+			ed.addr = maddr
+
+		case ed.token() == '+':
 			fallthrough
-		case *tok == '-':
+		case ed.token() == '-':
 			fallthrough
-		case *tok == '^':
-			mod = *tok
+		case ed.token() == '^':
+			mod = ed.token()
 			log.Printf("Modifier: %c\n", mod)
-			*tok = s.Scan()
-			if !unicode.IsDigit(*tok) {
+			ed.nextToken()
+			if !unicode.IsDigit(ed.token()) {
 				log.Printf("Next token is not a number\n")
 				switch mod {
-				case '^':
-					fallthrough
-				case '-':
+				case '^', '-':
 					log.Printf("Dot-- (%d) = %d\n", ed.Dot, ed.Dot-1)
-					ed.Dot--
+					ed.addr--
 				case '+':
 					log.Printf("Dot++ (%d) = %d\n", ed.Dot, ed.Dot+1)
-					ed.Dot--
+					ed.addr++
 				}
-				return nil
 			}
 			fallthrough
-		case unicode.IsDigit(*tok):
-			if unicode.IsDigit(*tok) {
-				n, err := ed.ConsumeNumber(s, tok)
+		case unicode.IsDigit(ed.token()):
+			if !first {
+				return 0, ErrInvalidAddress
+			}
+			if unicode.IsDigit(ed.token()) {
+				log.Printf("First token is number: %c\n", ed.token())
+				n, err := ed.scanNumber()
 				if err != nil {
-					return fmt.Errorf("number out of range")
+					return 0, ErrInvalidNumber
 				}
 				switch mod {
-				case '^':
-					fallthrough
-				case '-':
-					log.Printf("Dot (%d) - %d = %d\n", ed.Dot, n, ed.Dot-n)
-					ed.Dot -= n
+				case '^', '-':
+					log.Printf("Addr (%d) - %d = %d\n", ed.addr, n, ed.addr-n)
+					ed.addr -= n
 				case '+':
-					log.Printf("Dot (%d) + %d = %d\n", ed.Dot, n, ed.Dot+n)
-					ed.Dot += n
+					log.Printf("Addr (%d) + %d = %d\n", ed.addr, n, ed.addr+n)
+					ed.addr += n
 				default:
-					log.Printf("Dot (%d) = %d\n", ed.Dot, n)
-					ed.Dot = n
+					log.Printf("Addr (%d) = %d\n", ed.addr, n)
+					ed.addr = n
 				}
-				return nil
 			}
+
+		case ed.token() == ';':
+			fallthrough
+		case ed.token() == '%':
+			fallthrough
+		case ed.token() == ',':
+			log.Printf("token='%c' peek='%c' first=%t\n", ed.token(), ed.s.Peek(), first)
+			var r rune = ed.token()
+			if first {
+				ed.nextToken()
+				var err error
+				n, err := ed.Range()
+				if err != nil {
+					return 0, err
+				}
+				ed.addr = n
+				if n == ed.Dot && ed.Start == ed.End {
+					ed.Start = 1
+					if r == ';' {
+						ed.Start = ed.End
+					}
+					ed.Dot = len(ed.Lines)
+					ed.addr = ed.Dot
+					ed.End = ed.Dot
+					ed.addrcount = 2
+					return -1, nil
+				}
+				continue
+			}
+			fallthrough
+
 		default:
-			return nil
+			if ed.addr < 0 || ed.addr > len(ed.Lines) {
+				return -1, ErrInvalidAddress
+			}
+			return ed.addr, nil
 		}
 	}
 }
 
 func (ed *Editor) DoRange() error {
-	var s scanner.Scanner
-	var tok rune
+	var n int
+	var err error
+	ed.addrcount = 0
 
-	s.Init(bytes.NewReader(ed.input))
-	s.Mode = scanner.ScanRawStrings
-	s.Whitespace ^= scanner.GoWhitespace
-	tok = s.Scan()
-	ed.s = &s
-	ed.tok = &tok
-
-	var modify bool
-	switch tok {
-	case '.':
-		ed.Start = ed.Dot
-		tok = s.Scan()
-	case ',':
-		fallthrough
-	case '%':
-		ed.Start = 1
-		ed.Dot = len(ed.Lines)
-		ed.End = ed.Dot
-		tok = s.Scan()
-	case '$':
-		ed.Dot = len(ed.Lines)
-		tok = s.Scan()
-	case ';':
-		ed.Start = ed.Dot
-		ed.Dot = len(ed.Lines)
-		ed.End = ed.Dot
-		tok = s.Scan()
-	case '?':
-		fallthrough
-	case '/':
-		var mod rune = tok
-		var search string
-		tok = s.Scan()
-		for tok != scanner.EOF {
-			search += string(tok)
-			tok = s.Scan()
-		}
-		log.Printf("Search %c -> \"%s\"\n", mod, search)
-		if search == string(mod) || search == "" {
-			log.Println("Search is the modifier")
-			if ed.Search == "" {
-				return fmt.Errorf("no previous pattern")
-			}
-			log.Printf("Previous search is \"%s\"\n", ed.Search)
-			search = ed.Search
-		} else if search[len(search)-1] == byte(mod) {
-			search = search[:len(search)-2]
-		}
-		ed.Search = search
-	search:
-		switch mod {
-		case '/':
-			for i := ed.Dot; i < len(ed.Lines); i++ {
-				match, err := regexp.MatchString(search, ed.Lines[i])
-				if err != nil {
-					return err
-				}
-				if match {
-					log.Printf("Line %d (%s) matches the search string!\n", i, ed.Lines[i])
-					ed.Dot = i + 1
-					modify = true
-					break search
-				}
-			}
-			return fmt.Errorf("no match")
-		case '?':
-			for i := len(ed.Lines) - 1; i != ed.Dot; i-- {
-				match, err := regexp.MatchString(search, ed.Lines[i])
-				if err != nil {
-					return err
-				}
-				if match {
-					log.Printf("Line %d (%s) matches the search string!\n", i, ed.Lines[i])
-					ed.Dot = i + 1
-					modify = true
-					break search
-				}
-			}
-			return fmt.Errorf("no match")
-		}
-	default:
-		modify = true
-	}
-
-	log.Printf("Token: %c\n", tok)
-	if err := ed.Range(&s, &tok); err != nil {
-		return err
-	}
-	if modify {
-		ed.Start = ed.Dot
-	}
-
-	if tok == ',' {
-		log.Println("Address 2")
-		tok = s.Scan()
-		log.Printf("Token: %c\n", tok)
-		ed.Dot = ed.End
-		ed.Range(&s, &tok)
-	}
+	ed.Start = ed.Dot
 	ed.End = ed.Dot
 
-	// if ed.Dot-1 < 0 || ed.Start-1 < 0 ||
-	if ed.End < ed.Start ||
-		ed.End > len(ed.Lines) || ed.Start > len(ed.Lines) {
-		return fmt.Errorf("invalid address")
+	if ed.token() == scanner.EOF {
+		goto end
+	}
+	for {
+		n, err = ed.Range()
+		if n < 0 {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		ed.addr = n
+		ed.addrcount++
+		log.Printf("Start (%d) = End (%d)\n", ed.Start, ed.End)
+		ed.Start = ed.End
+		log.Printf("End (%d) = Addr (%d)\n", ed.End, ed.addr)
+		ed.End = ed.addr
+
+		if ed.token() != ',' && ed.token() != ';' {
+			break
+		} else if ed.s.Peek() == ';' {
+			ed.Dot = ed.addr
+		}
+		if ed.token() == scanner.EOF {
+			break
+		}
 	}
 
-	log.Printf("Dot=%d, Start=%d, End=%d, Token=%c\n", ed.Dot, ed.Start, ed.End, tok)
+end:
 
-	if tok == scanner.EOF {
-		log.Println("Detected no command, reverts to p on DOT")
+	if ed.addrcount == 1 || ed.End != ed.addr {
+		log.Printf("Start (%d) = End (%d)\n", ed.Start, ed.End)
+		ed.Start = ed.End
+	}
+
+	log.Printf("Dot (%d) = End (%d)\n", ed.Dot, ed.End)
+	ed.Dot = ed.End
+
+	if ed.token() == scanner.EOF && ed.s.Pos().Offset == 0 {
+		ed.Dot++
 		ed.Start = ed.Dot
-		tok = 'p'
+		ed.End = ed.Dot
 	}
+
+	if err := ed.checkRange(); err != nil {
+		return err
+	}
+
 	return nil
 }

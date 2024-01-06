@@ -4,24 +4,69 @@ import (
 	"bufio"
 	"fmt"
 	"log"
-	"os"
-	"os/exec"
 	"strconv"
 	"strings"
+	"unicode"
+
+	"os"
+	"os/exec"
 	"text/scanner"
 )
 
-func (ed *Editor) Write(path string) error {
-	var err error
+func (ed *Editor) scanString() string {
+	var str string
+	for ed.token() != scanner.EOF {
+		if ed.token() != '\n' && ed.token() != '\r' {
+			str += string(ed.token())
+		}
+		ed.nextToken()
+	}
+	log.Printf("scanString(): '%s'\n", str)
+	return str
+}
+
+func (ed *Editor) consumeWhitespace() {
+	for ed.token() == ' ' || ed.token() == '\t' || ed.token() == '\n' {
+		ed.nextToken()
+	}
+}
+
+func (ed *Editor) ReadFile(path string) error {
+	var siz int64
+	file, err := os.Open(path)
+	if err != nil {
+		return ErrCannotOpenFile
+	}
+	stat, err := file.Stat()
+	if err != nil {
+		return ErrCannotOpenFile
+	}
+	siz = stat.Size()
+	s := bufio.NewScanner(file)
+	for s.Scan() {
+		ed.Lines = append(ed.Lines, s.Text())
+	}
+	if err := s.Err(); err != nil {
+		return err
+	}
+	ed.Path = path
+	ed.Dot = len(ed.Lines)
+	ed.Start = ed.Dot
+	ed.End = ed.Dot
+	ed.addr = -1
+	fmt.Fprintf(ed.err, "%d\n", siz)
+	return nil
+}
+
+func (ed *Editor) WriteFile(start, end int, path string) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	var siz, start, end int
-	start = ed.Start - 1
-	end = ed.End - 1
-	for i := start; i < end; i++ {
+	var siz int
+	log.Printf("Write range %d to %d to %s\n", start, end, path)
+	for i := start - 1; i < end; i++ {
 		var line string = ed.Lines[i]
 		_, err := file.WriteString(line + "\n")
 		if err != nil {
@@ -30,13 +75,50 @@ func (ed *Editor) Write(path string) error {
 		siz += len(line) + 1
 	}
 	ed.Dirty = false
-	fmt.Fprintf(os.Stderr, "%d\n", siz)
+	fmt.Fprintf(ed.err, "%d\n", siz)
+	return err
+}
+
+func (ed *Editor) AppendFile(start, end int, path string) error {
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, os.ModeAppend)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	log.Printf("Append range %d to %d to %s\n", start, end, path)
+	var siz int
+	for i := start - 1; i < end; i++ {
+		var line string = ed.Lines[i]
+		_, err := file.WriteString(line + "\n")
+		if err != nil {
+			return err
+		}
+		siz += len(line) + 1
+	}
+	ed.Dirty = false
+	fmt.Fprintf(ed.err, "%d\n", siz)
 	return err
 }
 
 func (ed *Editor) Shell(command string) ([]string, error) {
 	var output []string
-	cmd := exec.Command("/bin/sh", "-c", command)
+	var cs scanner.Scanner
+	cs.Init(strings.NewReader(command))
+	cs.Mode = scanner.ScanChars
+	cs.Whitespace ^= scanner.GoWhitespace
+	var parsed string
+	var ctok rune = cs.Scan()
+	for ctok != scanner.EOF {
+		parsed += string(ctok)
+		if ctok != '\\' && cs.Peek() == '%' {
+			ctok = cs.Scan()
+			log.Printf("Replacing %% with '%s'\n", ed.Path)
+			parsed += ed.Path
+		}
+		ctok = cs.Scan()
+	}
+	log.Printf("Shell (parsed): '%s'\n", parsed)
+	cmd := exec.Command("/bin/sh", "-c", parsed)
 	stdout, err := cmd.StdoutPipe()
 	defer stdout.Close()
 	if err := cmd.Start(); err != nil {
@@ -56,19 +138,23 @@ func (ed *Editor) Shell(command string) ([]string, error) {
 	if err := s.Err(); err != nil {
 		return output, err
 	}
+	ed.Cmd = command
 	return output, err
 }
 
 func (ed *Editor) ReadInsert() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-	return reader.ReadString('\n')
+	r := bufio.NewReader(os.Stdin)
+	return r.ReadString('\n')
 }
 
 func (ed *Editor) DoCommand() error {
-	var err error
-	var tok rune = *ed.tok
+	log.Printf("Cmd='%c' (EOF=%t)\n", ed.token(), ed.token() == scanner.EOF)
 
-	switch tok {
+	// FIXME: We might need to check the bounds in some of these commands
+	// adding a ed.checkRanges() here will block the user from inserting
+	// text if the start and end values are invalid.
+
+	switch ed.token() {
 	case 'a':
 		for {
 			line, _ := ed.ReadInsert()
@@ -76,112 +162,136 @@ func (ed *Editor) DoCommand() error {
 			if line == "." {
 				break
 			}
-			if tok == 'a' {
-				ed.Lines = append(ed.Lines, "")
-				copy(ed.Lines[ed.Dot:], ed.Lines[ed.Dot:])
+
+			if len(ed.Lines) == ed.End {
+				ed.Lines = append(ed.Lines, line)
+				ed.End++
+				continue
 			}
-			ed.Lines[ed.Dot] = line
-			ed.Dot++
+			ed.Lines = append(ed.Lines[:ed.End+1], ed.Lines[ed.End:]...)
+			ed.Lines[ed.End] = line
 			ed.Dirty = true
 		}
+		return nil
+
 	case 'c':
 		ed.Dirty = true
-		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.Dot:]...)
-		ed.Dot = ed.Start - 1
+		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
+		ed.End = ed.Start - 1
 		for {
 			line, _ := ed.ReadInsert()
 			line = line[:len(line)-1]
 			if line == "." {
 				break
 			}
-			ed.Lines = append(ed.Lines[:ed.Dot+1], ed.Lines[ed.Dot:]...)
-			ed.Lines[ed.Dot] = line
-			ed.Dot++
+			ed.Lines = append(ed.Lines[:ed.End+1], ed.Lines[ed.End:]...)
+			ed.Lines[ed.End] = line
+			ed.End++
 		}
+		return nil
+
 	case 'd':
 		ed.Dirty = true
-		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.Dot:]...)
+		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
+		if ed.Start > len(ed.Lines) {
+			ed.Start = len(ed.Lines)
+		}
 		ed.Dot = ed.Start
+		ed.End = ed.Dot
+		ed.Start = ed.Dot
+		return nil
+
 	case 'E':
 		fallthrough
 	case 'e':
-		var uc bool = (tok == 'E')
-		tok = ed.s.Scan()
-		if tok != ' ' {
-			return fmt.Errorf("unexpected command suffix")
-		}
-		tok = ed.s.Scan()
-		var fname string
+		var uc bool = (ed.token() == 'E')
+		ed.nextToken()
+		ed.nextToken()
 		var cmd bool
-		if tok == '!' {
-			tok = ed.s.Scan()
+		if ed.token() == '!' {
+			ed.nextToken()
 			cmd = true
 		}
-		for tok != scanner.EOF {
-			fname += string(tok)
-			tok = ed.s.Scan()
-		}
-		if fname == "" {
-			if ed.Path == "" {
-				return fmt.Errorf("no current filename")
-			}
-			fname = ed.Path
-		}
-		if !uc && ed.Dirty {
-			ed.Dirty = false
-			return fmt.Errorf("warning: file modified")
-		}
+		ed.consumeWhitespace()
+		var fname string = ed.scanString()
 		switch cmd {
 		case true:
+			if fname == "" && ed.Cmd != "" {
+				fname = ed.Cmd
+			}
 			log.Printf("e command '%s'\n", fname)
 			lines, err := ed.Shell(fname)
 			if err != nil {
-				return fmt.Errorf("0")
+				return ErrZero
 			}
 			var siz int
 			for i := range lines {
 				siz += len(lines[i]) + 1
 			}
 			ed.Lines = lines
-			ed.Dot = len(lines)
-			fmt.Fprintf(os.Stderr, "%d\n", siz)
+			ed.Dot = len(ed.Lines)
+			ed.Start = ed.Dot
+			ed.End = ed.Dot
+			ed.addr = -1
+			fmt.Fprintf(ed.err, "%d\n", siz)
 		case false:
-			log.Printf("e file '%s'\n", fname)
-			err := ed.readFile(fname)
-			if err != nil {
+			if fname == "" && ed.Path == "" {
+				return ErrNoFileName
+			}
+			if !uc && ed.Dirty {
+				ed.Dirty = false
+				return ErrFileModified
+			}
+			if fname == "" {
+				fname = ed.Path
+			}
+			if err := ed.ReadFile(fname); err != nil {
 				return err
 			}
-			ed.Path = fname
 			log.Printf("Path: '%s'\n", ed.Path)
+		}
+		return nil
+
+	case 'f':
+		ed.nextToken()
+		log.Printf("Token=%c\n", ed.token())
+		if ed.token() == scanner.EOF {
+			if ed.Path == "" {
+				return ErrNoFileName
+			}
+			fmt.Fprintf(ed.err, "%s\n", ed.Path)
 			return nil
 		}
-	case 'f':
-		tok = ed.s.Scan()
-		log.Printf("Token=%c\n", tok)
-		if tok == scanner.EOF {
-			if ed.Path == "" {
-				return fmt.Errorf("no current filename")
-			}
-			fmt.Fprintf(os.Stderr, "%s\n", ed.Path)
-		}
+		ed.nextToken()
 		var filename string
-		for tok != scanner.EOF {
-			filename += string(tok)
-			tok = ed.s.Scan()
+		for ed.token() != scanner.EOF {
+			filename += string(ed.token())
+			ed.nextToken()
 		}
 		if filename == "" {
-			return fmt.Errorf("invalid filename")
+			return ErrNoFileName
 		}
+		log.Printf("Filename: '%s'\n", filename)
 		ed.Path = filename
-		fmt.Fprintf(os.Stderr, "%s\n", ed.Path)
+		fmt.Fprintf(ed.err, "%s\n", ed.Path)
+		return nil
+
 	case 'g':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("TODO: g (global) not implemented")
+
 	case 'G':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("TODO: G (interactive g) not implemented")
+
 	case 'H':
 		ed.printErrors = !ed.printErrors
+		return nil
+
 	case 'h':
-		fmt.Fprintf(os.Stderr, "%s\n", ed.Error)
+		if ed.Error != nil {
+			fmt.Fprintf(ed.err, "%s\n", ed.Error)
+		}
+		return nil
+
 	case 'i':
 		for {
 			line, _ := ed.ReadInsert()
@@ -189,36 +299,72 @@ func (ed *Editor) DoCommand() error {
 			if line == "." {
 				break
 			}
-			ed.Lines = append(ed.Lines[:ed.Dot], ed.Lines[ed.Dot-1:]...)
-			ed.Lines[ed.Dot-1] = line
-			ed.Dot++
+			if len(ed.Lines) == ed.End {
+				ed.Lines = append(ed.Lines, line)
+				ed.End++
+				continue
+			}
+			ed.Lines = append(ed.Lines[:ed.End+1], ed.Lines[ed.End:]...)
+			ed.Lines[ed.End] = line
+			ed.End++
+			ed.Dirty = true
 		}
+		ed.Dot = ed.End
+		ed.Start = ed.Dot
+		ed.addr = ed.Dot
+		return nil
+
 	case 'j':
-		var joined string = strings.Join(ed.Lines[ed.Start-1:ed.Dot], "")
+		if ed.Start == ed.End {
+			return ErrInvalidAddress
+		}
+		var joined string = strings.Join(ed.Lines[ed.Start-1:ed.End], "")
 		var result []string = append(append([]string{}, ed.Lines[:ed.Start-1]...), joined)
 		ed.Lines = append(result, ed.Lines[ed.End:]...)
 		ed.Dot = ed.Start
+		ed.End = ed.Dot
+		ed.addr = ed.Dot
 		ed.Dirty = true
+		return nil
+
 	case 'k':
-		tok = ed.s.Scan()
-		var mark byte = byte(tok) - 'a'
-		if tok == scanner.EOF || ed.s.Peek() != scanner.EOF || int(mark) >= len(ed.Mark) {
-			return fmt.Errorf("invalid command suffix")
+		ed.nextToken()
+		var buf string = ed.scanString()
+		switch len(buf) {
+		case 1:
+			break
+		case 0:
+			fallthrough
+		default:
+			return ErrInvalidCmdSuffix
 		}
-		log.Printf("Mark %d is set to Dot (%d)\n", int(mark), ed.Dot)
-		ed.Mark[int(mark)] = ed.Dot
+		var r rune = rune(buf[0])
+		if !unicode.IsLower(r) {
+			return ErrInvalidMark
+		}
+		log.Printf("Mark %c\n", r)
+		var mark int = int(byte(buf[0])) - 'a'
+		if mark >= len(ed.Mark) {
+			return ErrInvalidMark
+		}
+		log.Printf("Mark %d is set to End (%d)\n", mark, ed.End)
+		ed.Mark[int(mark)] = ed.End
+		return nil
+
 	case 'm':
-		var arg string
+		var err error
 		var dst int
-		tok = ed.s.Scan()
-		log.Printf("Destination: %c\n", tok)
-		for tok != scanner.EOF {
-			arg += string(tok)
-			tok = ed.s.Scan()
-		}
+		ed.nextToken()
+		log.Printf("Destination: %c\n", ed.token())
+		var arg string = ed.scanString()
 		dst, err = strconv.Atoi(arg)
 		if err != nil {
-			return fmt.Errorf("destination expected")
+			return ErrDestinationExpected
+		}
+		if dst < 0 || dst > len(ed.Lines) {
+			// TODO: OpenBSD ed will evaluate the destination address,
+			// so `24,26m-5` is actually a valid command
+			return ErrDestinationExpected
 		}
 		log.Printf("Destination (arg): %d (%s)\n", dst, arg)
 		lines := make([]string, ed.End-ed.Start+1)
@@ -226,6 +372,10 @@ func (ed *Editor) DoCommand() error {
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
 		ed.Dot = dst + len(lines)
+		ed.End = ed.Dot
+		ed.Start = ed.Dot
+		return err
+
 	case 'l':
 		fallthrough
 	case 'n':
@@ -235,117 +385,137 @@ func (ed *Editor) DoCommand() error {
 			if i < 0 {
 				continue
 			}
-			switch tok {
+			switch ed.token() {
 			case 'l':
 				var q string = strconv.QuoteToASCII(ed.Lines[i])
-				fmt.Fprintf(os.Stdout, "%s$\n", q[1:len(q)-1])
+				fmt.Fprintf(ed.out, "%s$\n", q[1:len(q)-1])
 			case 'n':
-				fmt.Fprintf(os.Stdout, "%d\t%s\n", i+1, ed.Lines[i])
+				fmt.Fprintf(ed.out, "%d\t%s\n", i+1, ed.Lines[i])
 			case 'p':
-				fmt.Fprintf(os.Stdout, "%s\n", ed.Lines[i])
+				fmt.Fprintf(ed.out, "%s\n", ed.Lines[i])
 			}
 		}
-		ed.Dot = ed.End
+		return nil
+
 	case 'P':
 		if ed.Prompt == 0 {
-			ed.Prompt = DefaultPrompt
+			ed.Prompt = defaultPrompt
 		} else {
 			ed.Prompt = 0
 		}
+		return nil
+
 	case 'q':
 		fallthrough
 	case 'Q':
-		if tok == 'q' && ed.Dirty {
+		if ed.token() == 'q' && ed.Dirty {
 			ed.Dirty = false
-			return fmt.Errorf("warning: file modified")
+			return ErrFileModified
 		}
 		os.Exit(0)
+		return nil
+
 	case 'r':
-		return fmt.Errorf("not implemented") // TODO read
+		return fmt.Errorf("TODO: r (read) not implemented")
+
 	case 's':
-		return fmt.Errorf("not implemented") // TODO substitute
+		return fmt.Errorf("TODO: s (substitute) not implemented")
+
 	case 't':
-		return fmt.Errorf("not implemented") // TODO transfer
+		return fmt.Errorf("TODO: t (transfer) not implemented")
+
 	case 'u':
-		return fmt.Errorf("not implemented") // TODO undo
+		return fmt.Errorf("TODO: u (undo) not implemented")
+
 	case 'v':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("TODO: v (inverse g) not implemented")
+
 	case 'V':
-		return fmt.Errorf("not implemented") // TODO
+		return fmt.Errorf("TODO: V (inverse V) not implemented")
+
+	case 'W':
+		fallthrough
 	case 'w':
 		var quit bool
-		tok = ed.s.Scan()
-		log.Printf("Write")
-		if tok == 'q' {
-			tok = ed.s.Scan()
-			log.Printf("Quit=true")
+		var r rune = ed.token()
+		var full bool = (ed.s.Pos().Offset == 1)
+		ed.nextToken()
+		if r == 'w' && ed.token() == 'q' {
+			ed.nextToken()
 			quit = true
+		} else {
+			log.Printf("Write (Append)\n")
 		}
-		var fname string = ed.Path
-		if tok == scanner.EOF && fname == "" {
-			return fmt.Errorf("no current filename")
+		log.Printf("Quit=%t\n", quit)
+		if ed.token() == ' ' {
+			ed.nextToken()
 		}
-		if tok == ' ' {
-			tok = ed.s.Scan()
-			fname = ""
+		var fname string = ed.scanString()
+		if fname == "" && ed.Path == "" {
+			return ErrNoFileName
 		}
-		for tok != scanner.EOF {
-			fname += string(tok)
-			tok = ed.s.Scan()
-		}
+		log.Printf("ed.Path: '%s'\n", ed.Path)
 		if fname == "" {
-			return fmt.Errorf("no current filename")
+			fname = ed.Path
 		}
-		log.Printf("Filename: '%s'\n", fname)
-		err := ed.Write(fname)
+		var s int = ed.Start
+		var e int = ed.End
+		if full {
+			log.Printf("Writing the whole file\n")
+			s = 1
+			e = len(ed.Lines)
+		}
+		var err error
+		if r == 'w' {
+			err = ed.WriteFile(s, e, fname)
+		} else {
+			err = ed.AppendFile(s, e, fname)
+		}
 		if quit {
 			os.Exit(0)
 		}
 		return err
-	case 'W':
-		return fmt.Errorf("not implemented") // TODO write
+
 	case 'z':
-		return fmt.Errorf("not implemented") // TODO scroll
+		return fmt.Errorf("TODO: z (scroll) not implemented")
+
 	case '=':
-		fmt.Fprintf(os.Stdout, "%d\n", len(ed.Lines))
+		fmt.Fprintf(ed.out, "%d\n", len(ed.Lines))
+		return nil
+
 	case '!':
-		tok = ed.s.Scan()
+		ed.nextToken()
+		ed.consumeWhitespace()
 		var buf string
-		if tok == scanner.EOF {
-			buf = ed.Cmd
-		} else {
-			for tok != scanner.EOF {
-				buf += string(tok)
-				tok = ed.s.Scan()
+		if ed.token() == scanner.EOF {
+			if ed.Cmd != "" {
+				buf = ed.Cmd
+			} else {
+				return ErrNoCmd
 			}
+		} else {
+			buf = ed.scanString()
 		}
 		log.Printf("Command (unparsed): '%s'\n", buf)
-		ed.Cmd = buf
-		var cs scanner.Scanner
-		cs.Init(strings.NewReader(buf))
-		cs.Mode = scanner.ScanChars
-		cs.Whitespace ^= scanner.GoWhitespace
-		var cmd string
-		var ctok rune = cs.Scan()
-		for ctok != scanner.EOF {
-			cmd += string(ctok)
-			if ctok != '\\' && cs.Peek() == '%' {
-				ctok = cs.Scan()
-				log.Printf("Replacing %% with '%s'\n", ed.Path)
-				cmd += ed.Path
-			}
-			ctok = cs.Scan()
-		}
-		output, err := ed.Shell(cmd)
+		output, err := ed.Shell(buf)
 		if err != nil {
 			return err
 		}
 		for i := range output {
-			fmt.Fprintf(os.Stderr, "%s\n", output[i])
+			fmt.Fprintf(ed.err, "%s\n", output[i])
 		}
-		fmt.Fprintln(os.Stderr, "!")
+		fmt.Fprintln(ed.err, "!")
+		return nil
+
+	case 0:
+		fallthrough
+	case scanner.EOF:
+		if ed.End-1 < 0 || ed.End-1 > len(ed.Lines) {
+			return ErrInvalidAddress
+		}
+		fmt.Fprintf(ed.out, "%s\n", ed.Lines[ed.End-1])
+		return nil
 	default:
-		return fmt.Errorf("unknown command")
+		return ErrUnknownCmd
 	}
-	return err
 }
