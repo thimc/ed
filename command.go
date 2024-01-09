@@ -340,7 +340,10 @@ func (ed *Editor) DoCommand() error {
 		return nil
 
 	case 'j':
-		if ed.Start == ed.End {
+		if ed.End == ed.Start {
+			ed.End++
+		}
+		if ed.End > len(ed.Lines) {
 			return ErrInvalidAddress
 		}
 		var joined string = strings.Join(ed.Lines[ed.Start-1:ed.End], "")
