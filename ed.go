@@ -44,7 +44,7 @@ type Editor struct {
 	Path  string
 	Dirty bool
 	Lines []string
-	Mark  ['z' - 'a']int
+	Mark  ['z' - 'a']int // [25]int
 
 	Dot   int
 	Start int
@@ -85,8 +85,8 @@ func NewEditor(stdin io.Reader, stdout io.Writer, stderr io.Writer) *Editor {
 	return &ed
 }
 
-// ReadInput() reads until the first new line '\n' or EOF
-// and configures the internal scanner and tokenizer for ed.
+// ReadInput() reads from the in io.Reader until it encounters a newline
+// symbol (\n') or EOF. After that it sets up the scanner and tokenizer.
 func (ed *Editor) ReadInput(r io.Reader) error {
 	ed.input = []byte{}
 	buf := make([]byte, 1)
