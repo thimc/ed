@@ -32,6 +32,7 @@ var (
 	ErrUnknownCmd          = errors.New("unknown command")
 	ErrUnexpectedCmdSuffix = errors.New("unexpected command suffix")
 	ErrInvalidCmdSuffix    = errors.New("invalid command suffix")
+	ErrInvalidDestination  = errors.New("invalid destination")
 	ErrDestinationExpected = errors.New("destination expected")
 	ErrFileModified        = errors.New("warning: file modified")
 	ErrNoPrevPattern       = errors.New("no previous pattern")

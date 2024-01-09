@@ -235,26 +235,24 @@ func (ed *Editor) DoCommand() error {
 		var err error
 		var dst int
 		ed.nextToken()
-		log.Printf("Destination: %c\n", ed.token())
-		var arg string = ed.scanString()
-		dst, err = strconv.Atoi(arg)
+		dst, err = ed.scanNumber()
 		if err != nil {
-			return ErrDestinationExpected
+			return ErrInvalidCmdSuffix
 		}
+		log.Printf("Range: %d,%d\n", ed.Start, ed.End)
+		log.Printf("Destination: %d\n", dst)
 		if dst < 0 || dst > len(ed.Lines) {
-			// TODO: OpenBSD ed will evaluate the destination address,
-			// so `24,26m-5` is actually a valid command
 			return ErrDestinationExpected
 		}
-		log.Printf("Destination (arg): %d (%s)\n", dst, arg)
-		lines := make([]string, ed.End-ed.Start+1)
-		copy(lines, ed.Lines[ed.Start-1:ed.End+1])
+		if dst-1 <= 0 || ed.Start-1 < 0 {
+			return ErrDestinationExpected
+		}
+		var lines []string = make([]string, ed.End-ed.Start+1)
+		copy(lines, ed.Lines[ed.Start-1:ed.End])
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
-		ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
+		ed.Lines = append(ed.Lines[:dst-len(lines)], append(lines, ed.Lines[dst-len(lines):]...)...)
 		ed.Dot = dst + len(lines)
-		ed.End = ed.Dot
-		ed.Start = ed.Dot
-		return err
+		return nil
 
 	case 'l':
 		fallthrough
