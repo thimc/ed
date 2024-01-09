@@ -168,7 +168,7 @@ func (ed *Editor) DoCommand() error {
 			if line == "." {
 				break
 			}
-			if ed.End - 1 < 0 {
+			if ed.End-1 < 0 {
 				ed.End++
 			}
 			if ed.End > len(ed.Lines) {
@@ -302,7 +302,26 @@ func (ed *Editor) DoCommand() error {
 		return fmt.Errorf("TODO: s (substitute) not implemented")
 
 	case 't':
-		return fmt.Errorf("TODO: t (transfer) not implemented")
+		ed.nextToken()
+		if ed.token() == scanner.EOF {
+			return ErrDestinationExpected
+		}
+		dst, err := ed.scanNumber()
+		if err != nil {
+			return ErrDestinationExpected
+		}
+		if err := ed.checkRange(); err != nil {
+			return err
+		}
+		if ed.Start-1 < 0 {
+			return ErrInvalidAddress
+		}
+		log.Printf("Copying %d,%d to %d\n", ed.Start, ed.End, dst)
+		var lines []string = make([]string, ed.End-ed.Start+1)
+		copy(lines, ed.Lines[ed.Start-1:ed.End])
+		ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
+		ed.Dot = dst + len(lines)
+		return nil
 
 	case 'u':
 		return fmt.Errorf("TODO: u (undo) not implemented")
