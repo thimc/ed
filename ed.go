@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"text/scanner"
+	"unicode"
 )
 
 const (
@@ -133,15 +138,149 @@ func (ed *Editor) setupSignals() {
 	}()
 }
 
-// debug function used to print the "stack frame" of the application,
-// the start, end and dot index values are printed to standard output.
-// The internal address value and the address counter is also printed.
-func (ed *Editor) dump() {
-	log.Printf("start=%d | end=%d | dot=%d | addr=%d | addrcount=%d | ",
-		ed.Start, ed.End, ed.Dot, ed.addr, ed.addrcount)
-	log.Printf("offset=%d | eof=%t | token='%c' | ",
-		ed.s.Pos().Offset, ed.token() == scanner.EOF, ed.token())
-	log.Printf("buffer_len=%d\n", len(ed.Lines))
+// ReadFile function will open the file specified by 'path,' read its
+// input into the internal file buffer, and set the cursor position
+// (dot) to the last line of the buffer. If no errors occur, the size
+// of the file in bytes will be printed to the err io.Writer.
+func (ed *Editor) ReadFile(path string) error {
+	var siz int64
+	file, err := os.Open(path)
+	if err != nil {
+		return ErrCannotOpenFile
+	}
+	stat, err := file.Stat()
+	if err != nil {
+		return ErrCannotOpenFile
+	}
+	siz = stat.Size()
+	s := bufio.NewScanner(file)
+	for s.Scan() {
+		ed.Lines = append(ed.Lines, s.Text())
+	}
+	if err := s.Err(); err != nil {
+		return err
+	}
+	ed.Path = path
+	ed.Dot = len(ed.Lines)
+	ed.Start = ed.Dot
+	ed.End = ed.Dot
+	ed.addr = -1
+	fmt.Fprintf(ed.err, "%d\n", siz)
+	return nil
+}
+
+// WriteFile function will attempt to write the lines from index 'start'
+// to 'end' in the file specified by 'path.' If successful, the current
+// buffer will no longer be considered dirty.
+func (ed *Editor) WriteFile(start, end int, path string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	var siz int
+	log.Printf("Write range %d to %d to %s\n", start, end, path)
+	for i := start - 1; i < end; i++ {
+		var line string = ed.Lines[i]
+		_, err := file.WriteString(line + "\n")
+		if err != nil {
+			return err
+		}
+		siz += len(line) + 1
+	}
+	ed.Dirty = false
+	fmt.Fprintf(ed.err, "%d\n", siz)
+	return err
+}
+
+// AppendFile will open the file 'path' and append the lines starting
+// at index 'start' until 'end.' If successful, the current buffer
+// will no longer be considered dirty.
+func (ed *Editor) AppendFile(start, end int, path string) error {
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, os.ModeAppend)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	log.Printf("Append range %d to %d to %s\n", start, end, path)
+	var siz int
+	for i := start - 1; i < end; i++ {
+		var line string = ed.Lines[i]
+		_, err := file.WriteString(line + "\n")
+		if err != nil {
+			return err
+		}
+		siz += len(line) + 1
+	}
+	ed.Dirty = false
+	fmt.Fprintf(ed.err, "%d\n", siz)
+	return err
+}
+
+// Shell runs the 'command' in /bin/sh and returns the standard output.
+// It will replace any unescaped '%' with the name of the current buffer.
+func (ed *Editor) Shell(command string) ([]string, error) {
+	var output []string
+	var cs scanner.Scanner
+	cs.Init(strings.NewReader(command))
+	cs.Mode = scanner.ScanChars
+	cs.Whitespace ^= scanner.GoWhitespace
+	var parsed string
+	var ctok rune = cs.Scan()
+	for ctok != scanner.EOF {
+		parsed += string(ctok)
+		if ctok != '\\' && cs.Peek() == '%' {
+			ctok = cs.Scan()
+			log.Printf("Replacing %% with '%s'\n", ed.Path)
+			parsed += ed.Path
+		}
+		ctok = cs.Scan()
+	}
+	log.Printf("Shell (parsed): '%s'\n", parsed)
+	cmd := exec.Command("/bin/sh", "-c", parsed)
+	stdout, err := cmd.StdoutPipe()
+	defer stdout.Close()
+	if err := cmd.Start(); err != nil {
+		return output, err
+	}
+	if err != nil {
+		return output, err
+	}
+	s := bufio.NewScanner(stdout)
+	s.Split(bufio.ScanLines)
+	for s.Scan() {
+		output = append(output, s.Text())
+	}
+	if err := cmd.Wait(); err != nil {
+		return output, err
+	}
+	if err := s.Err(); err != nil {
+		return output, err
+	}
+	ed.Cmd = command
+	return output, err
+}
+
+// ReadInsert will read from the internal in io.Reader until it
+// encounters a newline (\n) or is interrupted by SIGINT.
+func (ed *Editor) ReadInsert() (string, error) {
+	var buf bytes.Buffer
+	var b []byte = make([]byte, 1)
+	for {
+		if ed.sigint {
+			return "", fmt.Errorf("Canceled by SIGINT")
+		}
+		if _, err := ed.in.Read(b); err != nil {
+			return buf.String(), err
+		}
+		if b[0] == '\n' {
+			break
+		}
+		if err := buf.WriteByte(b[0]); err != nil {
+			return buf.String(), err
+		}
+	}
+	return buf.String(), nil
 }
 
 // checkRange checks if the Start and End values are valid numbers
@@ -153,4 +292,67 @@ func (ed *Editor) checkRange() error {
 		}
 	}
 	return nil
+}
+
+// scanString will advance the tokenizer, scanning the input buffer
+// until it reaches EOF, and return the collected tokens as a string.
+// Newlines (\n) and carriage returns (\r) are ignored.
+func (ed *Editor) scanString() string {
+	var str string
+	for ed.token() != scanner.EOF {
+		if ed.token() != '\n' && ed.token() != '\r' {
+			str += string(ed.token())
+		}
+		ed.nextToken()
+	}
+	log.Printf("scanString(): '%s'\n", str)
+	return str
+}
+
+// scanNumber will advance the tokenizer while the current token is a
+// digit and convert the parsed data to an integer
+func (ed *Editor) scanNumber() (int, error) {
+	var n, start, end int
+	var err error
+
+	start = ed.s.Position.Offset
+	for unicode.IsDigit(ed.token()) {
+		ed.nextToken()
+	}
+	end = ed.s.Position.Offset
+
+	num := string(ed.input[start:end])
+	log.Printf("Convert num: '%s'\n", num)
+	n, err = strconv.Atoi(num)
+	log.Printf("ConsumeNumber(): '%d' err=%t\n", n, err != nil)
+	return n, err
+}
+
+// skipWhitespace advances the tokenizer until the current token is
+// not a white space, tab indent, or a newline.
+func (ed *Editor) skipWhitespace() {
+	for ed.token() == ' ' || ed.token() == '\t' || ed.token() == '\n' {
+		ed.nextToken()
+	}
+}
+
+// token returns the current token.
+func (ed *Editor) token() rune {
+	return ed.tok
+}
+
+// nextToken will advance the tokenizer and set the current token
+func (ed *Editor) nextToken() {
+	ed.tok = ed.s.Scan()
+}
+
+// debug function used to print the "stack frame" of the application,
+// the start, end and dot index values are printed to standard output.
+// The internal address value and the address counter is also printed.
+func (ed *Editor) dump() {
+	log.Printf("start=%d | end=%d | dot=%d | addr=%d | addrcount=%d | ",
+		ed.Start, ed.End, ed.Dot, ed.addr, ed.addrcount)
+	log.Printf("offset=%d | eof=%t | token='%c' | ",
+		ed.s.Pos().Offset, ed.token() == scanner.EOF, ed.token())
+	log.Printf("buffer_len=%d\n", len(ed.Lines))
 }

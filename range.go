@@ -3,35 +3,9 @@ package main
 import (
 	"log"
 	"regexp"
-	"strconv"
 	"text/scanner"
 	"unicode"
 )
-
-func (ed *Editor) token() rune {
-	return ed.tok
-}
-
-func (ed *Editor) nextToken() {
-	ed.tok = ed.s.Scan()
-}
-
-func (ed *Editor) scanNumber() (int, error) {
-	var n, start, end int
-	var err error
-
-	start = ed.s.Position.Offset
-	for unicode.IsDigit(ed.token()) {
-		ed.nextToken()
-	}
-	end = ed.s.Position.Offset
-
-	num := string(ed.input[start:end])
-	log.Printf("Convert num: '%s'\n", num)
-	n, err = strconv.Atoi(num)
-	log.Printf("ConsumeNumber(): '%d' err=%t\n", n, err != nil)
-	return n, err
-}
 
 func (ed *Editor) Range() (int, error) {
 	ed.addr = ed.Dot
