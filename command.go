@@ -168,12 +168,15 @@ func (ed *Editor) DoCommand() error {
 			if line == "." {
 				break
 			}
-			if len(ed.Lines) == ed.End {
+			if ed.End - 1 < 0 {
+				ed.End++
+			}
+			if ed.End > len(ed.Lines) {
 				ed.Lines = append(ed.Lines, line)
 				ed.End++
 				continue
 			}
-			if ed.End-1 < 0 {
+			if ed.End < 0 {
 				return ErrInvalidAddress
 			}
 			ed.Lines = append(ed.Lines[:ed.End], ed.Lines[ed.End-1:]...)
@@ -181,6 +184,7 @@ func (ed *Editor) DoCommand() error {
 			ed.End++
 			ed.Dirty = true
 		}
+		ed.End--
 	end_insert:
 		ed.Dot = ed.End
 		ed.Start = ed.Dot
