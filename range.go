@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"regexp"
 	"strconv"
@@ -94,7 +93,7 @@ func (ed *Editor) Range() (int, error) {
 				e = 0
 			}
 			ed.dump()
-			fmt.Printf("S: %d, E: %d\n", s, e)
+			log.Printf("Search start: %d, end: %d\n", s, e)
 			for i := s; i != e; {
 				if i < 0 || i > len(ed.Lines) {
 					return 0, ErrNoMatch

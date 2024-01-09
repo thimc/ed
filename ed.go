@@ -58,21 +58,25 @@ type Editor struct {
 
 	printErrors bool
 
-	sigch chan os.Signal
-	out   io.Writer
-	err   io.Writer
+	sigch  chan os.Signal
+	sigint bool
+
+	in  io.Reader
+	out io.Writer
+	err io.Writer
 }
 
 // NewEditor returns a new Editor.
-func NewEditor(stdout io.Writer, stderr io.Writer) *Editor {
+func NewEditor(stdin io.Reader, stdout io.Writer, stderr io.Writer) *Editor {
 	ed := Editor{
 		Lines:  []string{},
 		Prompt: defaultPrompt,
 		sigch:  make(chan os.Signal, 1),
+		in:     stdin,
 		out:    stdout,
 		err:    stderr,
 	}
-	// ed.setupSignals()
+	ed.setupSignals()
 	return &ed
 }
 
@@ -111,19 +115,20 @@ func (ed *Editor) setupScanner() {
 
 // setupSignals sets up signal handlers for SIGHUP and SIGINT.
 func (ed *Editor) setupSignals() {
+	ed.sigint = false
 	signal.Notify(ed.sigch, syscall.SIGHUP, syscall.SIGINT)
 	go func() {
 		sig := <-ed.sigch
 		switch sig {
 		case syscall.SIGHUP:
 			if ed.Dirty {
-				log.Printf("Received SIGHUP ad file is dirty\n")
-				ed.WriteFile(0, len(ed.Lines), defaultHangupFile)
+				log.Printf("Received SIGHUP and file is dirty\n")
+				ed.WriteFile(1, len(ed.Lines), defaultHangupFile)
 			}
 		case syscall.SIGINT:
 			log.Printf("Received SIGINT\n")
 			fmt.Fprintf(os.Stderr, "%s\n", ErrDefault)
-			// TODO: Cancel "insert mode" whenever an SIGINT is received
+			ed.sigint = true
 		}
 	}()
 }

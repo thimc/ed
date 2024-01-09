@@ -17,7 +17,7 @@ import (
 //	 0: length of the buffer
 //	-1: skip test
 func TestRangePass(t *testing.T) {
-	var ted *Editor = NewEditor(io.Discard, io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	ted.setupTestFile()
 	log.SetOutput(io.Discard)
 
@@ -208,7 +208,7 @@ func TestRangePass(t *testing.T) {
 //	 0: length of the buffer
 //	-1: skip test
 func TestRangeFail(t *testing.T) {
-	var ted Editor = *NewEditor(io.Discard, io.Discard)
+	var ted Editor = *NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
 	ted.setupTestFile()
 

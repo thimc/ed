@@ -30,7 +30,7 @@ func printError(err error) bool {
 
 func main() {
 	flag.Parse()
-	ed = NewEditor(os.Stdout, os.Stderr)
+	ed = NewEditor(os.Stdin, os.Stdout, os.Stderr)
 	if !*debugFlag {
 		log.SetOutput(io.Discard)
 	}

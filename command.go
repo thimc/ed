@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"log"
 	"strconv"
@@ -143,8 +144,23 @@ func (ed *Editor) Shell(command string) ([]string, error) {
 }
 
 func (ed *Editor) ReadInsert() (string, error) {
-	r := bufio.NewReader(os.Stdin)
-	return r.ReadString('\n')
+	var buf bytes.Buffer
+	var b []byte = make([]byte, 1)
+	for {
+		if ed.sigint {
+			return "", fmt.Errorf("Canceled by SIGINT")
+		}
+		if _, err := ed.in.Read(b); err != nil {
+			return buf.String(), err
+		}
+		if b[0] == '\n' {
+			break
+		}
+		if err := buf.WriteByte(b[0]); err != nil {
+			return buf.String(), err
+		}
+	}
+	return buf.String(), nil
 }
 
 func (ed *Editor) DoCommand() error {
@@ -157,8 +173,11 @@ func (ed *Editor) DoCommand() error {
 	switch ed.token() {
 	case 'a':
 		for {
-			line, _ := ed.ReadInsert()
-			line = line[:len(line)-1]
+			line, err := ed.ReadInsert()
+			if err != nil {
+				ed.setupSignals()
+				return nil
+			}
 			if line == "." {
 				break
 			}
@@ -179,8 +198,11 @@ func (ed *Editor) DoCommand() error {
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		ed.End = ed.Start - 1
 		for {
-			line, _ := ed.ReadInsert()
-			line = line[:len(line)-1]
+			line, err := ed.ReadInsert()
+			if err != nil {
+				ed.setupSignals()
+				return nil
+			}
 			if line == "." {
 				break
 			}
@@ -263,16 +285,12 @@ func (ed *Editor) DoCommand() error {
 			return nil
 		}
 		ed.nextToken()
-		var filename string
-		for ed.token() != scanner.EOF {
-			filename += string(ed.token())
-			ed.nextToken()
-		}
-		if filename == "" {
+		var fname string = ed.scanString()
+		log.Printf("Filename: '%s'\n", fname)
+		if fname == "" {
 			return ErrNoFileName
 		}
-		log.Printf("Filename: '%s'\n", filename)
-		ed.Path = filename
+		ed.Path = fname
 		fmt.Fprintf(ed.err, "%s\n", ed.Path)
 		return nil
 
@@ -294,8 +312,11 @@ func (ed *Editor) DoCommand() error {
 
 	case 'i':
 		for {
-			line, _ := ed.ReadInsert()
-			line = line[:len(line)-1]
+			line, err := ed.ReadInsert()
+			if err != nil {
+				ed.setupSignals()
+				goto end_insert
+			}
 			if line == "." {
 				break
 			}
@@ -304,11 +325,15 @@ func (ed *Editor) DoCommand() error {
 				ed.End++
 				continue
 			}
-			ed.Lines = append(ed.Lines[:ed.End+1], ed.Lines[ed.End:]...)
-			ed.Lines[ed.End] = line
+			if ed.End-1 < 0 {
+				return ErrInvalidAddress
+			}
+			ed.Lines = append(ed.Lines[:ed.End], ed.Lines[ed.End-1:]...)
+			ed.Lines[ed.End-1] = line
 			ed.End++
 			ed.Dirty = true
 		}
+	end_insert:
 		ed.Dot = ed.End
 		ed.Start = ed.Dot
 		ed.addr = ed.Dot
@@ -440,13 +465,16 @@ func (ed *Editor) DoCommand() error {
 		var r rune = ed.token()
 		var full bool = (ed.s.Pos().Offset == 1)
 		ed.nextToken()
-		if r == 'w' && ed.token() == 'q' {
-			ed.nextToken()
-			quit = true
+		if r == 'w' {
+			log.Printf("Write\n")
+			if ed.token() == 'q' {
+				ed.nextToken()
+				quit = true
+				log.Printf("Quit=%t\n", quit)
+			}
 		} else {
 			log.Printf("Write (Append)\n")
 		}
-		log.Printf("Quit=%t\n", quit)
 		if ed.token() == ' ' {
 			ed.nextToken()
 		}
