@@ -12,7 +12,6 @@ import (
 func TestCmdAppendLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
-
 	tests := []struct {
 		input          []byte
 		data           string
@@ -71,7 +70,6 @@ func TestCmdAppendLines(t *testing.T) {
 func TestCmdChangeLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
-
 	tests := []struct {
 		input          []byte
 		data           string
@@ -124,14 +122,12 @@ func TestCmdChangeLines(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 // TestCmdDeleteLines tests the (d)elete command.
 func TestCmdDeleteLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
-
 	tests := []struct {
 		input          []byte
 		expectError    bool
@@ -185,7 +181,6 @@ func TestCmdDeleteLines(t *testing.T) {
 func TestCmdJoinLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
-
 	tests := []struct {
 		input          []byte
 		expectError    bool
@@ -235,7 +230,7 @@ func TestCmdJoinLines(t *testing.T) {
 	}
 }
 
-// TestCmdMoveLines tests the (i)nsert command.
+// TestCmdMoveLines tests the (m)ovement command.
 func TestCmdMoveLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
@@ -316,14 +311,12 @@ func TestCmdMoveLines(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 // TestCmdInsertLines tests the (i)nsert command.
 func TestCmdInsertLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
-
 	tests := []struct {
 		input          []byte
 		data           string
@@ -380,14 +373,12 @@ func TestCmdInsertLines(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 // TestCmdTransferLines tests the (t)ransfer command.
 func TestCmdTransferLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
-
 	tests := []struct {
 		input          []byte
 		expectError    bool
