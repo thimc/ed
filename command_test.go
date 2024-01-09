@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// TestCmdAppendLines tests the `append` (a) command.
-func TestAppendLines(t *testing.T) {
+// TestCmdAppendLines tests the (a)ppend command.
+func TestCmdAppendLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
 
@@ -67,7 +67,68 @@ func TestAppendLines(t *testing.T) {
 	}
 }
 
-// TestCmdJoinLines tests the `join` (j) command.
+
+// TestCmdChangeLines tests the (c)hange command.
+func TestCmdChangeLines(t *testing.T) {
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	log.SetOutput(io.Discard)
+
+	tests := []struct {
+		input          []byte
+		data           string
+		expectError    bool
+		buffer         []string
+		expectedBuffer []string
+	}{
+		{
+			input:          []byte("1,3c"),
+			data:           "changed\ntext\n.",
+			expectError:    false,
+			buffer:         []string{"hello", "world", "!"},
+			expectedBuffer: []string{"changed","text"},
+		},
+		{
+			input:          []byte("1c"),
+			data:           "changed\n.",
+			expectError:    false,
+			buffer:         []string{"hello", "world", "!"},
+			expectedBuffer: []string{"changed", "world", "!"},
+		},
+		{
+			input:          []byte("c"),
+			data:           "changed\n.",
+			expectError:    false,
+			buffer:         []string{"hello", "world", "!"},
+			expectedBuffer: []string{"hello", "world", "changed"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(string(test.input), func(t *testing.T) {
+			ted.in = strings.NewReader(test.data)
+			ted.setupTestFile(test.buffer)
+			ted.ReadInput(bytes.NewBuffer(test.input))
+			if err := ted.DoRange(); err != nil && !test.expectError {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if err := ted.DoCommand(); err != nil && !test.expectError {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if len(test.expectedBuffer) != len(ted.Lines) {
+				t.Fatalf("expected the total line count to be %d, got %d",
+					len(test.expectedBuffer), len(ted.Lines))
+			}
+			for i := 0; i < len(ted.Lines); i++ {
+				if ted.Lines[i] != test.expectedBuffer[i] {
+					t.Errorf("expected line %d to be '%s', got '%s'",
+						i, test.expectedBuffer[i], ted.Lines[i])
+				}
+			}
+		})
+	}
+
+}
+
+// TestCmdJoinLines tests the (j)oin command.
 func TestCmdJoinLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
