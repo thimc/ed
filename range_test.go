@@ -18,7 +18,7 @@ import (
 //	-1: skip test
 func TestRangePass(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
-	ted.setupTestFile()
+	ted.setupTestFile(dummyFile)
 	log.SetOutput(io.Discard)
 
 	tests := []struct {
@@ -202,15 +202,15 @@ func TestRangePass(t *testing.T) {
 // TestRangeFail() runs tests on the range parser.  It expects there
 // to be a file in the current working directory called "file". All
 // the tests in this function are done in the same editing session
-// and all are expected to fail except "ReadFile".
-// Some of the test values have special meaning for convenient testing:
+// and all are expected to fail.  Some of the test values have
+// special meaning for convenient testing:
 //
 //	 0: length of the buffer
 //	-1: skip test
 func TestRangeFail(t *testing.T) {
 	var ted Editor = *NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
-	ted.setupTestFile()
+	ted.setupTestFile(dummyFile)
 
 	tests := []struct {
 		input []byte
@@ -233,38 +233,40 @@ func TestRangeFail(t *testing.T) {
 	}
 }
 
-func (ed *Editor) setupTestFile() {
-	ed.Lines = []string{
-		"01AAAAAAAAAAAAAAAAAAAAAAAAA",
-		"02BBBBBBBBBBBBBBBBBBBBBBBBB",
-		"03CCCCCCCCCCCCCCCCCCCCCCCCC",
-		"04DDDDDDDDDDDDDDDDDDDDDDDDD",
-		"05EEEEEEEEEEEEEEEEEEEEEEEEE",
-		"06FFFFFFFFFFFFFFFFFFFFFFFFF",
-		"07GGGGGGGGGGGGGGGGGGGGGGGGG",
-		"08HHHHHHHHHHHHHHHHHHHHHHHHH",
-		"09IIIIIIIIIIIIIIIIIIIIIIIII",
-		"10JJJJJJJJJJJJJJJJJJJJJJJJJ",
-		"11KKKKKKKKKKKKKKKKKKKKKKKKK",
-		"12LLLLLLLLLLLLLLLLLLLLLLLLL",
-		"13MMMMMMMMMMMMMMMMMMMMMMMMM",
-		"14NNNNNNNNNNNNNNNNNNNNNNNNN",
-		"15OOOOOOOOOOOOOOOOOOOOOOOOO",
-		"16PPPPPPPPPPPPPPPPPPPPPPPPP",
-		"17QQQQQQQQQQQQQQQQQQQQQQQQQ",
-		"18RRRRRRRRRRRRRRRRRRRRRRRRR",
-		"19SSSSSSSSSSSSSSSSSSSSSSSSS",
-		"20TTTTTTTTTTTTTTTTTTTTTTTTT",
-		"21UUUUUUUUUUUUUUUUUUUUUUUUU",
-		"22VVVVVVVVVVVVVVVVVVVVVVVVV",
-		"23WWWWWWWWWWWWWWWWWWWWWWWWW",
-		"24XXXXXXXXXXXXXXXXXXXXXXXXX",
-		"25YYYYYYYYYYYYYYYYYYYYYYYYY",
-		"26ZZZZZZZZZZZZZZZZZZZZZZZZZ",
-	}
+func (ed *Editor) setupTestFile(buf []string) {
+	ed.Lines = buf
 	ed.Path = "test"
-	ed.Dot = len(ed.Lines)
+	ed.Dot = len(buf)
 	ed.Start = ed.Dot
 	ed.End = ed.Dot
 	ed.addr = -1
+}
+
+var dummyFile = []string{
+	"01AAAAAAAAAAAAAAAAAAAAAAAAA",
+	"02BBBBBBBBBBBBBBBBBBBBBBBBB",
+	"03CCCCCCCCCCCCCCCCCCCCCCCCC",
+	"04DDDDDDDDDDDDDDDDDDDDDDDDD",
+	"05EEEEEEEEEEEEEEEEEEEEEEEEE",
+	"06FFFFFFFFFFFFFFFFFFFFFFFFF",
+	"07GGGGGGGGGGGGGGGGGGGGGGGGG",
+	"08HHHHHHHHHHHHHHHHHHHHHHHHH",
+	"09IIIIIIIIIIIIIIIIIIIIIIIII",
+	"10JJJJJJJJJJJJJJJJJJJJJJJJJ",
+	"11KKKKKKKKKKKKKKKKKKKKKKKKK",
+	"12LLLLLLLLLLLLLLLLLLLLLLLLL",
+	"13MMMMMMMMMMMMMMMMMMMMMMMMM",
+	"14NNNNNNNNNNNNNNNNNNNNNNNNN",
+	"15OOOOOOOOOOOOOOOOOOOOOOOOO",
+	"16PPPPPPPPPPPPPPPPPPPPPPPPP",
+	"17QQQQQQQQQQQQQQQQQQQQQQQQQ",
+	"18RRRRRRRRRRRRRRRRRRRRRRRRR",
+	"19SSSSSSSSSSSSSSSSSSSSSSSSS",
+	"20TTTTTTTTTTTTTTTTTTTTTTTTT",
+	"21UUUUUUUUUUUUUUUUUUUUUUUUU",
+	"22VVVVVVVVVVVVVVVVVVVVVVVVV",
+	"23WWWWWWWWWWWWWWWWWWWWWWWWW",
+	"24XXXXXXXXXXXXXXXXXXXXXXXXX",
+	"25YYYYYYYYYYYYYYYYYYYYYYYYY",
+	"26ZZZZZZZZZZZZZZZZZZZZZZZZZ",
 }
