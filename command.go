@@ -30,16 +30,17 @@ func (ed *Editor) DoCommand() error {
 			if line == "." {
 				break
 			}
-
 			if len(ed.Lines) == ed.End {
 				ed.Lines = append(ed.Lines, line)
+				ed.Start++
 				ed.End++
 				continue
 			}
-			ed.Lines = append(ed.Lines[:ed.End+1], ed.Lines[ed.End:]...)
-			ed.Lines[ed.End] = line
+			ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
 			ed.Dirty = true
+			ed.End++
 		}
+		ed.Start = ed.End
 		return nil
 
 	case 'c':
@@ -116,9 +117,13 @@ func (ed *Editor) DoCommand() error {
 			if fname == "" {
 				fname = ed.Path
 			}
-			if err := ed.ReadFile(fname); err != nil {
+			var siz int64
+			var err error
+			siz, ed.Lines, err = ed.ReadFile(fname)
+			if err != nil {
 				return err
 			}
+			fmt.Fprintf(ed.err, "%d\n", siz)
 			log.Printf("Path: '%s'\n", ed.Path)
 		}
 		return nil
@@ -353,7 +358,46 @@ func (ed *Editor) DoCommand() error {
 		return nil
 
 	case 'r':
-		return fmt.Errorf("TODO: r (read) not implemented")
+		ed.nextToken()
+		ed.skipWhitespace()
+		var fname string = ed.scanString()
+		var bufsiz int64
+		if fname == "" {
+			if ed.Path == "" {
+				return ErrNoFileName
+			}
+			fname = ed.Path
+		}
+		var lines []string
+		var err error
+		if fname[0] == '!' {
+			lines, err = ed.Shell(fname[1:])
+			if err != nil {
+				fmt.Fprintf(ed.err, "%d\n", bufsiz)
+				return nil
+			}
+			for _, ln := range lines {
+				bufsiz += int64(len(ln) + 1)
+			}
+		} else {
+			bufsiz, lines, err = ed.ReadFile(fname)
+			if err != nil {
+				return err
+			}
+		}
+		for _, line := range lines {
+			if len(ed.Lines) == ed.End {
+				ed.Lines = append(ed.Lines, line)
+				ed.End++
+				continue
+			}
+			ed.Lines = append(ed.Lines[:ed.End+1], ed.Lines[ed.End:]...)
+			ed.Lines[ed.End] = line
+		}
+		ed.Dot = ed.End
+		ed.Start = ed.End
+		fmt.Fprintf(ed.err, "%d\n", bufsiz)
+		return nil
 
 	case 's':
 		ed.nextToken()

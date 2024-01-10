@@ -25,6 +25,7 @@ const (
 var (
 	ErrDefault             = errors.New("?") // descriptive error message, don't you think?
 	ErrCannotOpenFile      = errors.New("cannot open input file")
+	ErrCannotReadFile      = errors.New("cannot read input file")
 	ErrDestinationExpected = errors.New("destination expected")
 	ErrFileModified        = errors.New("warning: file modified")
 	ErrInvalidAddress      = errors.New("invalid address")
@@ -148,15 +149,17 @@ func (ed *Editor) setupSignals() {
 // input into the internal file buffer, and set the cursor position
 // (dot) to the last line of the buffer. If no errors occur, the size
 // of the file in bytes will be printed to the err io.Writer.
-func (ed *Editor) ReadFile(path string) error {
+func (ed *Editor) ReadFile(path string) (int64, []string, error) {
+	var lines []string
 	var siz int64
 	file, err := os.Open(path)
 	if err != nil {
-		return ErrCannotOpenFile
+		return siz, lines, ErrCannotOpenFile
 	}
+	defer file.Close()
 	stat, err := file.Stat()
 	if err != nil {
-		return ErrCannotOpenFile
+		return siz, lines, ErrCannotOpenFile
 	}
 	siz = stat.Size()
 	s := bufio.NewScanner(file)
@@ -164,15 +167,14 @@ func (ed *Editor) ReadFile(path string) error {
 		ed.Lines = append(ed.Lines, s.Text())
 	}
 	if err := s.Err(); err != nil {
-		return err
+		return siz, lines, err
 	}
 	ed.Path = path
 	ed.Dot = len(ed.Lines)
 	ed.Start = ed.Dot
 	ed.End = ed.Dot
 	ed.addr = -1
-	fmt.Fprintf(ed.err, "%d\n", siz)
-	return nil
+	return siz, lines, nil
 }
 
 // WriteFile function will attempt to write the lines from index 'start'

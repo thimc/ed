@@ -18,27 +18,35 @@ func TestCmdAppendLines(t *testing.T) {
 		expectError    bool
 		buffer         []string
 		expectedBuffer []string
+		expectedStart  int
+		expectedEnd    int
 	}{
 		{
 			input:          []byte("1,3a"),
-			data:           "appended\ntext\n.",
+			data:           "A\nB\nC\n.\n",
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "world", "!", "appended", "text"},
+			expectedBuffer: []string{"hello", "world", "!", "A", "B", "C"},
+			expectedStart:  6,
+			expectedEnd:    6,
 		},
 		{
-			input:          []byte("1a"),
-			data:           "appended\n.",
+			input:          []byte("2a"),
+			data:           "A\nB\nC\n.\n",
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "appended", "world", "!"},
+			expectedBuffer: []string{"hello", "world", "A", "B", "C", "!"},
+			expectedStart:  5,
+			expectedEnd:    5,
 		},
 		{
 			input:          []byte("a"),
-			data:           "appended\n.",
+			data:           "appended\n.\n",
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world", "!", "appended"},
+			expectedStart:  4,
+			expectedEnd:    4,
 		},
 	}
 	for _, test := range tests {
@@ -51,6 +59,7 @@ func TestCmdAppendLines(t *testing.T) {
 			}
 			if err := ted.DoCommand(); err != nil && !test.expectError {
 				t.Fatalf("expected no error, got %s", err)
+
 			}
 			if len(test.expectedBuffer) != len(ted.Lines) {
 				t.Fatalf("expected the total line count to be %d, got %d",
@@ -61,6 +70,12 @@ func TestCmdAppendLines(t *testing.T) {
 					t.Errorf("expected line %d to be '%s', got '%s'",
 						i, test.expectedBuffer[i], ted.Lines[i])
 				}
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
 			}
 		})
 	}
@@ -408,7 +423,6 @@ func TestCmdInsertLines(t *testing.T) {
 		})
 	}
 }
-
 
 // TestCmdJoinLines tests the (j)oin command.
 func TestCmdJoinLines(t *testing.T) {

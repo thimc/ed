@@ -40,10 +40,12 @@ func main() {
 
 	var args []string = flag.Args()
 	if len(args) == 1 {
-		if err := ed.ReadFile(args[0]); err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+		var siz int64
+		var err error
+		siz, ed.Lines, err = ed.ReadFile(args[0])
+		if !printError(err) {
+			fmt.Fprintf(ed.err, "%d\n", siz)
 			ed.Path = args[0]
-		} else {
 			log.Printf("Open file %s\n", args[0])
 		}
 	}
