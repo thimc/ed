@@ -164,7 +164,7 @@ func (ed *Editor) ReadFile(path string) (int64, []string, error) {
 	siz = stat.Size()
 	s := bufio.NewScanner(file)
 	for s.Scan() {
-		ed.Lines = append(ed.Lines, s.Text())
+		lines = append(lines, s.Text())
 	}
 	if err := s.Err(); err != nil {
 		return siz, lines, err
