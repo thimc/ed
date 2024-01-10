@@ -229,7 +229,7 @@ func (ed *Editor) DoCommand() error {
 			line, err := ed.ReadInsert()
 			if err != nil {
 				ed.setupSignals()
-				goto end_insert
+				break
 			}
 			if line == "." {
 				break
@@ -247,14 +247,11 @@ func (ed *Editor) DoCommand() error {
 			}
 			ed.Lines = append(ed.Lines[:ed.End], ed.Lines[ed.End-1:]...)
 			ed.Lines[ed.End-1] = line
-			ed.End++
 			ed.Dirty = true
+			ed.End++
 		}
 		ed.End--
-	end_insert:
-		ed.Dot = ed.End
-		ed.Start = ed.Dot
-		ed.addr = ed.Dot
+		ed.Start = ed.End
 		return nil
 
 	case 'j':

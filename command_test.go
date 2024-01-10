@@ -213,24 +213,32 @@ func TestCmdDeleteLines(t *testing.T) {
 		expectError    bool
 		buffer         []string
 		expectedBuffer []string
+		expectedStart  int
+		expectedEnd    int
 	}{
 		{
 			input:          []byte("1,2d"),
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"!"},
+			expectedStart:  1,
+			expectedEnd:    1,
 		},
 		{
 			input:          []byte("2d"),
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "!"},
+			expectedStart:  2,
+			expectedEnd:    2,
 		},
 		{
 			input:          []byte("d"),
 			expectError:    true,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world"},
+			expectedStart:  2,
+			expectedEnd:    2,
 		},
 	}
 	for _, test := range tests {
@@ -252,6 +260,12 @@ func TestCmdDeleteLines(t *testing.T) {
 					t.Errorf("expected line %d to be '%s', got '%s'",
 						i, test.expectedBuffer[i], ted.Lines[i])
 				}
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
 			}
 		})
 	}
@@ -386,7 +400,8 @@ func TestCmdInsertLines(t *testing.T) {
 		expectError    bool
 		buffer         []string
 		expectedBuffer []string
-		expectedDot    int
+		expectedStart  int
+		expectedEnd    int
 	}{
 		{
 			input:          []byte("1,3i"),
@@ -394,7 +409,8 @@ func TestCmdInsertLines(t *testing.T) {
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world", "inserted", "text", "!"},
-			expectedDot:    4,
+			expectedStart:  4,
+			expectedEnd:    4,
 		},
 		{
 			input:          []byte("1i"),
@@ -402,7 +418,8 @@ func TestCmdInsertLines(t *testing.T) {
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"inserted", "hello", "world", "!"},
-			expectedDot:    1,
+			expectedStart:  1,
+			expectedEnd:    1,
 		},
 		{
 			input:          []byte("i"),
@@ -410,7 +427,8 @@ func TestCmdInsertLines(t *testing.T) {
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world", "inserted", "!"},
-			expectedDot:    3,
+			expectedStart:  3,
+			expectedEnd:    3,
 		},
 	}
 	for _, test := range tests {
@@ -433,6 +451,12 @@ func TestCmdInsertLines(t *testing.T) {
 					t.Errorf("expected line %d to be '%s', got '%s'",
 						i, test.expectedBuffer[i], ted.Lines[i])
 				}
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
 			}
 		})
 	}
