@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// TestCmdAppendLines tests the (a)ppend command.
+// TestCmdAppendLines tests the append (a) command.
 func TestCmdAppendLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
@@ -81,7 +81,7 @@ func TestCmdAppendLines(t *testing.T) {
 	}
 }
 
-// TestCmdBang tests the ! command.
+// TestCmdBang tests the shell ! command.
 func TestCmdBang(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
@@ -132,7 +132,7 @@ func TestCmdBang(t *testing.T) {
 	}
 }
 
-// TestCmdChangeLines tests the (c)hange command.
+// TestCmdChangeLines tests the change (c) command.
 func TestCmdChangeLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
@@ -204,7 +204,7 @@ func TestCmdChangeLines(t *testing.T) {
 	}
 }
 
-// TestCmdDeleteLines tests the (d)elete command.
+// TestCmdDeleteLines tests the delete (d) command.
 func TestCmdDeleteLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
@@ -271,7 +271,17 @@ func TestCmdDeleteLines(t *testing.T) {
 	}
 }
 
-// TestCmdGlobal tests the (g)lobal and in(v)erse global command.
+// TestCmdEdit tests the edit (e) command.
+func TestCmdEdit(t *testing.T) {
+	// TODO: TestCmdEdit
+}
+
+// TestCmdFile tests the file name (f) command.
+func TestCmdFile(t *testing.T) {
+	// TODO: TestCmdFile
+}
+
+// TestCmdGlobal tests the global (g) and inverse global (v) command.
 func TestCmdGlobal(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
@@ -390,7 +400,7 @@ func TestCmdGlobal(t *testing.T) {
 	}
 }
 
-// TestCmdInsertLines tests the (i)nsert command.
+// TestCmdInsertLines tests the insert (i) command.
 func TestCmdInsertLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
@@ -462,7 +472,7 @@ func TestCmdInsertLines(t *testing.T) {
 	}
 }
 
-// TestCmdJoinLines tests the (j)oin command.
+// TestCmdJoinLines tests the join (j) command.
 func TestCmdJoinLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
@@ -564,7 +574,7 @@ func TestCmdMark(t *testing.T) {
 	}
 }
 
-// TestCmdMoveLines tests the (m)ovement command.
+// TestCmdMoveLines tests the movement (m) command.
 func TestCmdMoveLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
@@ -660,43 +670,56 @@ func TestCmdMoveLines(t *testing.T) {
 	}
 }
 
-// TestCmdPrintLines tests all the print commands (p, l, n).
-func TestCmdPrintLines(t *testing.T) {
+// TestCmdPrintLastError tests the print last error (h) command.
+func TestCmdPrintLastError(t *testing.T) {
+	// TODO: TestCmdPrintLastError
+}
+
+// TestCmdPrintTotalLines tests the total lines (=) command.
+func TestCmdPrintTotalLines(t *testing.T) {
+	// TODO: TestCmdPrintTotalLines
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
 	tests := []struct {
 		input          []byte
+		buffer         []string
 		expectError    bool
 		expectedOutput string
 		expectedStart  int
 		expectedEnd    int
 	}{
-		// {
-		// 	input:          []byte("!ls *.go | wc -l"), // probably a bad idea
-		// 	expectError:    false,
-		// 	expectedOutput: "       6\n!\n",
-		// },
-		// {
-		// 	input:          []byte("!"),
-		// 	expectError:    false,
-		// 	expectedOutput: "       6\n!\n",
-		// },
-		// {
-		// 	input:       []byte("!!"),
-		// 	expectError: true,
-		// },
-		// {
-		// 	input:          []byte("! "),
-		// 	expectError:    false,
-		// 	expectedOutput: "       6\n!\n",
-		// },
+		{
+			input:          []byte("1,5="),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "7\n",
+			expectedStart:  1,
+			expectedEnd:    5,
+		},
+		{
+			input:          []byte("3="),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "7\n",
+			expectedStart:  3,
+			expectedEnd:    3,
+		},
+		{
+			input:          []byte("="),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "7\n",
+			expectedStart:  7,
+			expectedEnd:    7,
+		},
 	}
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
 			var err error
 			var b bytes.Buffer
-			ted.err = &b
+			ted.out = &b
 			ted.ReadInput(bytes.NewBuffer(test.input))
+			ted.setupTestFile(test.buffer)
 			if err = ted.DoRange(); err != nil && !test.expectError {
 				t.Fatalf("expected no error, got %s", err)
 			}
@@ -709,8 +732,163 @@ func TestCmdPrintLines(t *testing.T) {
 			if b.String() != test.expectedOutput {
 				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
 			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
+			}
 		})
 	}
+}
+
+
+// TestCmdPrintLines tests all the print commands (p, l, n).
+func TestCmdPrintLines(t *testing.T) {
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	log.SetOutput(io.Discard)
+	tests := []struct {
+		input          []byte
+		buffer         []string
+		expectError    bool
+		expectedOutput string
+		expectedStart  int
+		expectedEnd    int
+	}{
+		{
+			input:          []byte("1p"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "A\n",
+			expectedStart:  1,
+			expectedEnd:    1,
+		},
+		{
+			input:          []byte("1n"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "1\tA\n",
+			expectedStart:  1,
+			expectedEnd:    1,
+		},
+		{
+			input:          []byte("1l"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "A$\n",
+			expectedStart:  1,
+			expectedEnd:    1,
+		},
+		{
+			input:          []byte("1,5p"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "A\nB\nC\nD\nE\n",
+			expectedStart:  1,
+			expectedEnd:    5,
+		},
+		{
+			input:          []byte("1,5n"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "1\tA\n2\tB\n3\tC\n4\tD\n5\tE\n",
+			expectedStart:  1,
+			expectedEnd:    5,
+		},
+		{
+			input:          []byte("1,5l"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "A$\nB$\nC$\nD$\nE$\n",
+			expectedStart:  1,
+			expectedEnd:    5,
+		},
+		{
+			input:          []byte(",p"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "A\nB\nC\nD\nE\nF\nG\n",
+			expectedStart:  1,
+			expectedEnd:    7,
+		},
+		{
+			input:          []byte(",n"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "1\tA\n2\tB\n3\tC\n4\tD\n5\tE\n6\tF\n7\tG\n",
+			expectedStart:  1,
+			expectedEnd:    7,
+		},
+		{
+			input:          []byte(",l"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "A$\nB$\nC$\nD$\nE$\nF$\nG$\n",
+			expectedStart:  1,
+			expectedEnd:    7,
+		},
+		{
+			input:          []byte("p"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "G\n",
+			expectedStart:  7,
+			expectedEnd:    7,
+		},
+		{
+			input:          []byte("n"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "7\tG\n",
+			expectedStart:  7,
+			expectedEnd:    7,
+		},
+		{
+			input:          []byte("l"),
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
+			expectError:    false,
+			expectedOutput: "G$\n",
+			expectedStart:  7,
+			expectedEnd:    7,
+		},
+	}
+	for _, test := range tests {
+		t.Run(string(test.input), func(t *testing.T) {
+			var err error
+			var b bytes.Buffer
+			ted.out = &b
+			ted.ReadInput(bytes.NewBuffer(test.input))
+			ted.setupTestFile(test.buffer)
+			if err = ted.DoRange(); err != nil && !test.expectError {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if err = ted.DoCommand(); err != nil && !test.expectError {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if test.expectError && err == nil {
+				t.Fatalf("expected error, got none")
+			}
+			if b.String() != test.expectedOutput {
+				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
+			}
+		})
+	}
+}
+
+// TestCmdRead tests the read (r) command.
+func TestCmdRead(t *testing.T) {
+	// TODO: TestCmdRead
+}
+
+// TestCmdScroll tests the scroll (z) command.
+func TestCmdScroll(t *testing.T) {
+	// TODO: TestCmdScroll
 }
 
 // TestCmdSubstitute tests the substitute (s) command.
@@ -802,7 +980,17 @@ func TestCmdSubstitute(t *testing.T) {
 	}
 }
 
-// TestCmdTransferLines tests the (t)ransfer command.
+// TestCmdToggleError tests the toggle error (H) command.
+func TestCmdToggleError(t *testing.T) {
+	// TODO: TestCmdToggleError
+}
+
+// TestCmdTogglePrompt tests the toggle prompt (P) command.
+func TestCmdTogglePrompt(t *testing.T) {
+	// TODO: TestCmdTogglePrompt
+}
+
+// TestCmdTransferLines tests the transfer (t) command.
 func TestCmdTransferLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
@@ -895,4 +1083,9 @@ func TestCmdTransferLines(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCmdWrite tests the write commands (w, wq, W).
+func TestCmdWrite(t *testing.T) {
+	// TODO: TestCmdWrite
 }
