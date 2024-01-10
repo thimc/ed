@@ -24,20 +24,21 @@ const (
 
 var (
 	ErrDefault             = errors.New("?") // descriptive error message, don't you think?
-	ErrInvalidAddress      = errors.New("invalid address")
-	ErrInvalidMark         = errors.New("invalid mark character")
-	ErrInvalidNumber       = errors.New("number out of range")
 	ErrCannotOpenFile      = errors.New("cannot open input file")
-	ErrNoFileName          = errors.New("no current filename")
-	ErrUnknownCmd          = errors.New("unknown command")
-	ErrUnexpectedCmdSuffix = errors.New("unexpected command suffix")
-	ErrInvalidCmdSuffix    = errors.New("invalid command suffix")
-	ErrInvalidDestination  = errors.New("invalid destination")
 	ErrDestinationExpected = errors.New("destination expected")
 	ErrFileModified        = errors.New("warning: file modified")
-	ErrNoPrevPattern       = errors.New("no previous pattern")
-	ErrNoMatch             = errors.New("no match")
+	ErrInvalidAddress      = errors.New("invalid address")
+	ErrInvalidCmdSuffix    = errors.New("invalid command suffix")
+	ErrInvalidDestination  = errors.New("invalid destination")
+	ErrInvalidMark         = errors.New("invalid mark character")
+	ErrInvalidNumber       = errors.New("number out of range")
+	ErrInvalidPatternDelim = errors.New("invalid pattern delimiter")
 	ErrNoCmd               = errors.New("no command")
+	ErrNoFileName          = errors.New("no current filename")
+	ErrNoMatch             = errors.New("no match")
+	ErrNoPrevPattern       = errors.New("no previous pattern")
+	ErrUnexpectedCmdSuffix = errors.New("unexpected command suffix")
+	ErrUnknownCmd          = errors.New("unknown command")
 	ErrZero                = errors.New("0")
 )
 
@@ -307,6 +308,25 @@ func (ed *Editor) scanString() string {
 		ed.nextToken()
 	}
 	log.Printf("scanString(): '%s'\n", str)
+	return str
+}
+
+// scanStringUntil will advance the tokenizer, scanning the input
+// buffer until it reaches the delimiter 'delim' or EOF, and return
+// the collected tokens as a string.  Newlines (\n) and carriage returns
+// (\r) are ignored.
+func (ed *Editor) scanStringUntil(delim rune) string {
+	var str string
+	for ed.token() != scanner.EOF {
+		if ed.token() != '\n' && ed.token() != '\r' {
+			str += string(ed.token())
+		}
+		ed.nextToken()
+		if ed.token() == delim {
+			break
+		}
+	}
+	log.Printf("scanStringUntil(): '%s'\n", str)
 	return str
 }
 

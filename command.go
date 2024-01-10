@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -142,11 +143,61 @@ func (ed *Editor) DoCommand() error {
 		fmt.Fprintf(ed.err, "%s\n", ed.Path)
 		return nil
 
-	case 'g':
-		return fmt.Errorf("TODO: g (global) not implemented")
-
+	case 'V':
+		fallthrough
 	case 'G':
-		return fmt.Errorf("TODO: G (interactive g) not implemented")
+		fallthrough
+	case 'v':
+		fallthrough
+	case 'g':
+		var i bool = (ed.token() == 'G' || ed.token() == 'V')
+		var v bool = (ed.token() == 'v' || ed.token() == 'V')
+		if ed.s.Pos().Offset == 1 {
+			ed.Start = 1
+			ed.End = len(ed.Lines)
+		}
+		ed.nextToken()
+		var delim rune = ed.token()
+		ed.nextToken()
+		if delim == ' ' || delim == scanner.EOF {
+			return ErrInvalidPatternDelim
+		}
+		var s int = ed.Start
+		var e int = ed.End
+		var search string = ed.scanStringUntil(delim)
+		if ed.token() == delim {
+			ed.nextToken()
+		}
+		var cmd string = ed.scanStringUntil(delim)
+		if cmd == "" && !i {
+			cmd = "p"
+		}
+		log.Printf("Interactive: %t\n", i)
+		log.Printf("inverse: %t\n", v)
+		log.Printf("Range: %d,%d\n", s, e)
+		log.Printf("Search: '%s'\n", search)
+		log.Printf("Command: '%s'\n", cmd)
+		for idx := s - 1; idx < e; idx++ {
+			match, err := regexp.MatchString(search, ed.Lines[idx])
+			if err != nil {
+				return err
+			}
+			if (!match && !v) || (v && match){
+				continue
+			}
+			log.Printf("Line %d '%s' matches the search query\n", idx, ed.Lines[idx])
+			ed.Start = idx + 1
+			ed.End = ed.Start
+			ed.Dot = ed.End
+			ed.ReadInput(strings.NewReader(cmd))
+			if err := ed.DoCommand(); err != nil {
+				return err
+			}
+			if e > len(ed.Lines) {
+				e = len(ed.Lines)
+			}
+		}
+		return nil
 
 	case 'H':
 		ed.printErrors = !ed.printErrors
@@ -323,12 +374,6 @@ func (ed *Editor) DoCommand() error {
 
 	case 'u':
 		return fmt.Errorf("TODO: u (undo) not implemented")
-
-	case 'v':
-		return fmt.Errorf("TODO: v (inverse g) not implemented")
-
-	case 'V':
-		return fmt.Errorf("TODO: V (inverse V) not implemented")
 
 	case 'W':
 		fallthrough
