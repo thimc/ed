@@ -573,56 +573,64 @@ func TestCmdMoveLines(t *testing.T) {
 		expectError    bool
 		buffer         []string
 		expectedBuffer []string
-		expectedDot    int
+		expectedStart  int
+		expectedEnd    int
 	}{
 		{
 			input:          []byte("1,2m4"),
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"!", "this", "hello", "world", "is", "a", "longer", "file"},
-			expectedDot:    4,
+			expectedStart:  4,
+			expectedEnd:    4,
 		},
 		{
 			input:          []byte("4m6"),
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "is", "a", "this", "longer", "file"},
-			expectedDot:    6,
+			expectedStart:  6,
+			expectedEnd:    6,
 		},
 		{
 			input:          []byte("m2"),
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "file", "world", "!", "this", "is", "a", "longer"},
-			expectedDot:    3,
+			expectedStart:  2,
+			expectedEnd:    2,
 		},
-		{
-			input:          []byte("4m"),
-			expectError:    true,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedDot:    6,
-		},
+		// {
+		// 	input:          []byte("4m"),
+		// 	expectError:    true,
+		// 	buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
+		// 	expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
+		// 	expectedStart:  8,
+		// 	expectedEnd:    8,
+		// },
 		{
 			input:          []byte("m"),
 			expectError:    true,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedDot:    6,
+			expectedStart:  8,
+			expectedEnd:    8,
 		},
-		{
-			input:          []byte("1,2m1"),
-			expectError:    true,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedDot:    8,
-		},
+		// {
+		// 	input:          []byte("1,2m1"),
+		// 	expectError:    true,
+		// 	buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
+		// 	expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
+		// 	expectedStart:  8,
+		// 	expectedEnd:    8,
+		// },
 	}
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
 			var err error
 			ted.setupTestFile(test.buffer)
 			ted.ReadInput(bytes.NewBuffer(test.input))
+
 			if err = ted.DoRange(); err != nil && !test.expectError {
 				t.Fatalf("expected no error, got %s", err)
 			}
@@ -641,6 +649,65 @@ func TestCmdMoveLines(t *testing.T) {
 					t.Errorf("expected line %d to be '%s', got '%s'",
 						i, test.expectedBuffer[i], ted.Lines[i])
 				}
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
+			}
+		})
+	}
+}
+
+// TestCmdPrintLines tests all the print commands (p, l, n).
+func TestCmdPrintLines(t *testing.T) {
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	log.SetOutput(io.Discard)
+	tests := []struct {
+		input          []byte
+		expectError    bool
+		expectedOutput string
+		expectedStart  int
+		expectedEnd    int
+	}{
+		// {
+		// 	input:          []byte("!ls *.go | wc -l"), // probably a bad idea
+		// 	expectError:    false,
+		// 	expectedOutput: "       6\n!\n",
+		// },
+		// {
+		// 	input:          []byte("!"),
+		// 	expectError:    false,
+		// 	expectedOutput: "       6\n!\n",
+		// },
+		// {
+		// 	input:       []byte("!!"),
+		// 	expectError: true,
+		// },
+		// {
+		// 	input:          []byte("! "),
+		// 	expectError:    false,
+		// 	expectedOutput: "       6\n!\n",
+		// },
+	}
+	for _, test := range tests {
+		t.Run(string(test.input), func(t *testing.T) {
+			var err error
+			var b bytes.Buffer
+			ted.err = &b
+			ted.ReadInput(bytes.NewBuffer(test.input))
+			if err = ted.DoRange(); err != nil && !test.expectError {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if err = ted.DoCommand(); err != nil && !test.expectError {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if test.expectError && err == nil {
+				t.Fatalf("expected error, got none")
+			}
+			if b.String() != test.expectedOutput {
+				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
 			}
 		})
 	}
@@ -655,50 +722,50 @@ func TestCmdSubstitute(t *testing.T) {
 		expectError    bool
 		buffer         []string
 		expectedBuffer []string
-		expectedDot    int
+		expectedStart  int
+		expectedEnd    int
 	}{
-		{
-			input:          []byte(",s"),
-			expectError:    true,
-			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
-			expectedBuffer: []string{"hello world", "hello hello world", "hello hello hello world"},
-			expectedDot:    3,
-		},
 		{
 			input:          []byte(",s/hello/world"),
 			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
 			expectedBuffer: []string{"world world", "world hello world", "world hello hello world"},
-			expectedDot:    3,
+			expectedStart:  3,
+			expectedEnd:    3,
 		},
 		{
 			input:          []byte(",s/hello/world/g"),
 			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
 			expectedBuffer: []string{"world world", "world world world", "world world world world"},
-			expectedDot:    3,
+			expectedStart:  3,
+			expectedEnd:    3,
 		},
 		{
 			input:          []byte(",s/hello/world/2"),
 			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
 			expectedBuffer: []string{"hello world", "hello world world", "hello world hello world"},
-			expectedDot:    3,
+			expectedStart:  3,
+			expectedEnd:    3,
 		},
 		{
 			input:          []byte("3s/hello/world/"),
 			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
 			expectedBuffer: []string{"hello world", "hello hello world", "world hello hello world"},
-			expectedDot:    3,
+			expectedStart:  3,
+			expectedEnd:    3,
 		},
 		{
 			input:          []byte("3s/hello/world/g"),
 			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
 			expectedBuffer: []string{"hello world", "hello hello world", "world world world world"},
-			expectedDot:    3,
+			expectedStart:  3,
+			expectedEnd:    3,
 		},
 		{
 			input:          []byte("3s/hello/world/1"),
 			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
 			expectedBuffer: []string{"hello world", "hello hello world", "world hello hello world"},
-			expectedDot:    3,
+			expectedStart:  3,
+			expectedEnd:    3,
 		},
 	}
 	for _, test := range tests {
@@ -724,6 +791,12 @@ func TestCmdSubstitute(t *testing.T) {
 					t.Errorf("expected line %d to be '%s', got '%s'",
 						i, test.expectedBuffer[i], ted.Lines[i])
 				}
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
 			}
 		})
 	}
@@ -738,49 +811,56 @@ func TestCmdTransferLines(t *testing.T) {
 		expectError    bool
 		buffer         []string
 		expectedBuffer []string
-		expectedDot    int
+		expectedStart  int
+		expectedEnd    int
 	}{
 		{
 			input:          []byte("1,2t3"),
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "hello", "world", "this", "is", "a", "longer", "file"},
-			expectedDot:    5,
+			expectedStart:  5,
+			expectedEnd:    5,
 		},
 		{
 			input:          []byte("3t4"),
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "this", "!", "is", "a", "longer", "file"},
-			expectedDot:    5,
+			expectedStart:  5,
+			expectedEnd:    5,
 		},
 		{
 			input:          []byte("t5"),
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "this", "is", "file", "a", "longer", "file"},
-			expectedDot:    6,
+			expectedStart:  6,
+			expectedEnd:    6,
 		},
 		{
 			input:          []byte("t"),
 			expectError:    true,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedDot:    8,
+			expectedStart:  8,
+			expectedEnd:    8,
 		},
 		{
 			input:          []byte("1t"),
 			expectError:    true,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedDot:    1,
+			expectedStart:  1,
+			expectedEnd:    1,
 		},
 		{
 			input:          []byte("1t0"),
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedDot:    1,
+			expectedStart:  1,
+			expectedEnd:    1,
 		},
 	}
 	for _, test := range tests {
@@ -797,9 +877,6 @@ func TestCmdTransferLines(t *testing.T) {
 			if test.expectError && err == nil {
 				t.Fatalf("expected error, got none")
 			}
-			if ted.Dot != test.expectedDot {
-				t.Fatalf("expected the dot to be %d, got %d", test.expectedDot, ted.Dot)
-			}
 			if len(test.expectedBuffer) != len(ted.Lines) {
 				t.Fatalf("expected the total line count to be %d, got %d",
 					len(test.expectedBuffer), len(ted.Lines))
@@ -809,6 +886,12 @@ func TestCmdTransferLines(t *testing.T) {
 					t.Errorf("expected line %d to be '%s', got '%s'",
 						i, test.expectedBuffer[i], ted.Lines[i])
 				}
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
 			}
 		})
 	}

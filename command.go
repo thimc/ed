@@ -25,7 +25,7 @@ func (ed *Editor) DoCommand() error {
 			line, err := ed.ReadInsert()
 			if err != nil {
 				ed.setupSignals()
-				return nil
+				break
 			}
 			if line == "." {
 				break
@@ -51,7 +51,7 @@ func (ed *Editor) DoCommand() error {
 			line, err := ed.ReadInsert()
 			if err != nil {
 				ed.setupSignals()
-				return nil
+				break
 			}
 			if line == "." {
 				break
@@ -300,6 +300,8 @@ func (ed *Editor) DoCommand() error {
 		ed.nextToken()
 		dst, err = ed.scanNumber()
 		if err != nil {
+			ed.Start = ed.Dot
+			ed.End = ed.Dot
 			return ErrInvalidCmdSuffix
 		}
 		log.Printf("Range: %d,%d\n", ed.Start, ed.End)
@@ -307,14 +309,15 @@ func (ed *Editor) DoCommand() error {
 		if dst < 0 || dst > len(ed.Lines) {
 			return ErrDestinationExpected
 		}
-		if dst-1 <= 0 || ed.Start-1 < 0 {
+		var lines []string = make([]string, ed.End-ed.Start+1)
+		if dst-len(lines) <= 0 || ed.Start-1 < 0 {
 			return ErrDestinationExpected
 		}
-		var lines []string = make([]string, ed.End-ed.Start+1)
 		copy(lines, ed.Lines[ed.Start-1:ed.End])
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		ed.Lines = append(ed.Lines[:dst-len(lines)], append(lines, ed.Lines[dst-len(lines):]...)...)
-		ed.Dot = dst + len(lines)
+		ed.End = dst
+		ed.Start = ed.End
 		return nil
 
 	case 'l':
@@ -393,7 +396,6 @@ func (ed *Editor) DoCommand() error {
 			ed.Lines = append(ed.Lines[:ed.End+1], ed.Lines[ed.End:]...)
 			ed.Lines[ed.End] = line
 		}
-		ed.Dot = ed.End
 		ed.Start = ed.End
 		fmt.Fprintf(ed.err, "%d\n", bufsiz)
 		return nil
@@ -442,7 +444,9 @@ func (ed *Editor) DoCommand() error {
 		log.Printf("Modifier: '%c'\n", mod)
 		log.Printf("All: '%t'\n", all)
 		var match bool
-		for i := ed.Start - 1; i < ed.End; i++ {
+		var s int = ed.Start - 1
+		var e int = ed.End
+		for i := s; i < e; i++ {
 			n = N
 			if re.MatchString(ed.Lines[i]) {
 				match = true
@@ -456,6 +460,8 @@ func (ed *Editor) DoCommand() error {
 					}
 					return s
 				})
+				ed.End = i + 1
+				ed.Start = i + 1
 			}
 		}
 		if !match {
@@ -482,7 +488,8 @@ func (ed *Editor) DoCommand() error {
 		var lines []string = make([]string, ed.End-ed.Start+1)
 		copy(lines, ed.Lines[ed.Start-1:ed.End])
 		ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
-		ed.Dot = dst + len(lines)
+		ed.End = dst + len(lines)
+		ed.Start = ed.End
 		return nil
 
 	case 'u':
