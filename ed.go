@@ -58,10 +58,11 @@ type Editor struct {
 	s         scanner.Scanner
 	tok       rune
 
-	Search string
-	Error  error
-	Prompt rune
-	Cmd    string
+	Search    string
+	Error     error
+	Prompt    rune
+	Cmd       string
+	globalCmd string
 
 	printErrors bool
 

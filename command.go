@@ -171,6 +171,8 @@ func (ed *Editor) DoCommand() error {
 		var cmd string = ed.scanStringUntil(delim)
 		if cmd == "" && !i {
 			cmd = "p"
+		} else if cmd == "&" && i {
+			cmd = ed.globalCmd
 		}
 		log.Printf("Interactive: %t\n", i)
 		log.Printf("inverse: %t\n", v)
@@ -197,6 +199,7 @@ func (ed *Editor) DoCommand() error {
 				e = len(ed.Lines)
 			}
 		}
+		ed.globalCmd = cmd
 		return nil
 
 	case 'H':
