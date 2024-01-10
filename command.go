@@ -168,7 +168,12 @@ func (ed *Editor) DoCommand() error {
 		if ed.token() == delim {
 			ed.nextToken()
 		}
-		var cmd string = ed.scanStringUntil(delim)
+		var cmd string = ed.scanString()
+		if cmd != "" {
+			if cmd[:len(cmd)-1] == string(delim) {
+				cmd = cmd[:len(cmd)-1]
+			}
+		}
 		if cmd == "" && !i {
 			cmd = "p"
 		} else if cmd == "&" && i {
@@ -184,7 +189,7 @@ func (ed *Editor) DoCommand() error {
 			if err != nil {
 				return err
 			}
-			if (!match && !v) || (v && match){
+			if (!match && !v) || (v && match) {
 				continue
 			}
 			log.Printf("Line %d '%s' matches the search query\n", idx, ed.Lines[idx])
@@ -351,7 +356,69 @@ func (ed *Editor) DoCommand() error {
 		return fmt.Errorf("TODO: r (read) not implemented")
 
 	case 's':
-		return fmt.Errorf("TODO: s (substitute) not implemented")
+		ed.nextToken()
+		var search, replacement string
+		var mod rune
+		var re *regexp.Regexp
+		var err error
+		ed.nextToken()
+		if ed.token() == scanner.EOF {
+			if ed.prevSubSearch == "" && ed.prevSubReplace == "" {
+				return ErrNoPreviousSub
+			}
+			search = ed.prevSubSearch
+			replacement = ed.prevSubReplace
+		}
+		search = ed.scanStringUntil('/')
+		ed.nextToken()
+		if ed.token() != scanner.EOF {
+			replacement = ed.scanStringUntil('/')
+			ed.nextToken()
+		}
+		if ed.token() != scanner.EOF {
+			mod = ed.token()
+		}
+		re, err = regexp.Compile(search)
+		if err != nil {
+			return ErrNoMatch
+		}
+		var all bool = (mod == 'g')
+		var n int = 1
+		var N int = 1
+		if unicode.IsDigit(mod) {
+			num, err := strconv.Atoi(string(mod))
+			if err != nil {
+				return ErrInvalidCmdSuffix
+			}
+			n = num
+			N = num
+			log.Printf("Replace %d only\n", n)
+		}
+		log.Printf("Search: '%s'\n", search)
+		log.Printf("Replace: '%s'\n", replacement)
+		log.Printf("Modifier: '%c'\n", mod)
+		log.Printf("All: '%t'\n", all)
+		var match bool
+		for i := ed.Start - 1; i < ed.End; i++ {
+			n = N
+			if re.MatchString(ed.Lines[i]) {
+				match = true
+				ed.Lines[i] = re.ReplaceAllStringFunc(ed.Lines[i], func(s string) string {
+					n--
+					if all {
+						n = 0
+					}
+					if n == 0 {
+						return replacement
+					}
+					return s
+				})
+			}
+		}
+		if !match {
+			return ErrNoMatch
+		}
+		return nil
 
 	case 't':
 		ed.nextToken()

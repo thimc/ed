@@ -37,6 +37,7 @@ var (
 	ErrNoFileName          = errors.New("no current filename")
 	ErrNoMatch             = errors.New("no match")
 	ErrNoPrevPattern       = errors.New("no previous pattern")
+	ErrNoPreviousSub       = errors.New("no previous substitution")
 	ErrUnexpectedCmdSuffix = errors.New("unexpected command suffix")
 	ErrUnknownCmd          = errors.New("unknown command")
 	ErrZero                = errors.New("0")
@@ -58,11 +59,13 @@ type Editor struct {
 	s         scanner.Scanner
 	tok       rune
 
-	Search    string
-	Error     error
-	Prompt    rune
-	Cmd       string
-	globalCmd string
+	Search         string
+	Error          error
+	Prompt         rune
+	Cmd            string
+	globalCmd      string
+	prevSubSearch  string
+	prevSubReplace string
 
 	printErrors bool
 
@@ -318,14 +321,11 @@ func (ed *Editor) scanString() string {
 // (\r) are ignored.
 func (ed *Editor) scanStringUntil(delim rune) string {
 	var str string
-	for ed.token() != scanner.EOF {
+	for ed.token() != scanner.EOF && ed.token() != delim {
 		if ed.token() != '\n' && ed.token() != '\r' {
 			str += string(ed.token())
 		}
 		ed.nextToken()
-		if ed.token() == delim {
-			break
-		}
 	}
 	log.Printf("scanStringUntil(): '%s'\n", str)
 	return str
