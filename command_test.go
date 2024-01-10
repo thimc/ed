@@ -142,27 +142,35 @@ func TestCmdChangeLines(t *testing.T) {
 		expectError    bool
 		buffer         []string
 		expectedBuffer []string
+		expectedStart  int
+		expectedEnd    int
 	}{
 		{
 			input:          []byte("1,3c"),
-			data:           "changed\ntext\n.",
+			data:           "changed\ntext\n.\n",
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"changed", "text"},
+			expectedStart:  2,
+			expectedEnd:    2,
 		},
 		{
 			input:          []byte("1c"),
-			data:           "changed\n.",
+			data:           "changed\n.\n",
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"changed", "world", "!"},
+			expectedStart:  1,
+			expectedEnd:    1,
 		},
 		{
 			input:          []byte("c"),
-			data:           "changed\n.",
+			data:           "changed\n.\n",
 			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world", "changed"},
+			expectedStart:  3,
+			expectedEnd:    3,
 		},
 	}
 	for _, test := range tests {
@@ -185,6 +193,12 @@ func TestCmdChangeLines(t *testing.T) {
 					t.Errorf("expected line %d to be '%s', got '%s'",
 						i, test.expectedBuffer[i], ted.Lines[i])
 				}
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
 			}
 		})
 	}

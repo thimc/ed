@@ -60,6 +60,8 @@ func (ed *Editor) DoCommand() error {
 			ed.Lines[ed.End] = line
 			ed.End++
 		}
+		ed.Start = ed.End
+		ed.Dot = ed.End
 		return nil
 
 	case 'd':
