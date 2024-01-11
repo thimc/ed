@@ -69,6 +69,7 @@ type Editor struct {
 	prevSubReplace string
 
 	printErrors bool
+	Silent      bool
 
 	sigch  chan os.Signal
 	sigint bool
@@ -147,32 +148,32 @@ func (ed *Editor) setupSignals() {
 // input into the internal file buffer, and set the cursor position
 // (dot) to the last line of the buffer. If no errors occur, the size
 // of the file in bytes will be printed to the err io.Writer.
-func (ed *Editor) ReadFile(path string) (int64, []string, error) {
+func (ed *Editor) ReadFile(path string) ([]string, error) {
 	var lines []string
-	var siz int64
 	file, err := os.Open(path)
 	if err != nil {
-		return siz, lines, ErrCannotOpenFile
+		return lines, ErrCannotOpenFile
 	}
 	defer file.Close()
-	stat, err := file.Stat()
+	stat, err := os.Stat(path)
 	if err != nil {
-		return siz, lines, ErrCannotOpenFile
+		return lines, ErrCannotReadFile
 	}
-	siz = stat.Size()
 	s := bufio.NewScanner(file)
 	for s.Scan() {
 		lines = append(lines, s.Text())
 	}
 	if err := s.Err(); err != nil {
-		return siz, lines, err
+		return lines, err
 	}
 	ed.Path = path
-	ed.End = len(ed.Lines)
+	ed.End = len(lines)
 	ed.Start = ed.End
 	ed.Dot = ed.End
-	ed.addr = -1
-	return siz, lines, nil
+	if !ed.Silent {
+		fmt.Fprintf(ed.err, "%d\n", stat.Size())
+	}
+	return lines, nil
 }
 
 // WriteFile function will attempt to write the lines from index 'start'

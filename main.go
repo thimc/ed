@@ -33,13 +33,12 @@ func main() {
 	if *promptFlag {
 		ed.Prompt = defaultPrompt
 	}
+	ed.Silent = *suppressFlag
 	var args []string = flag.Args()
 	if len(args) == 1 {
-		var siz int64
 		var err error
-		siz, ed.Lines, err = ed.ReadFile(args[0])
+		ed.Lines, err = ed.ReadFile(args[0])
 		if !printError(err) {
-			fmt.Fprintf(ed.err, "%d\n", siz)
 			ed.Path = args[0]
 		}
 	}
