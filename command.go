@@ -388,6 +388,9 @@ func (ed *Editor) DoCommand() error {
 			replacement = ed.scanStringUntil('/')
 			ed.nextToken()
 		}
+		if replacement == "%" && ed.prevSubReplace != "" {
+			replacement = ed.prevSubReplace
+		}
 		if ed.token() != scanner.EOF {
 			mod = ed.token()
 		}
