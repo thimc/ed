@@ -1219,6 +1219,7 @@ func TestCmdWrite(t *testing.T) {
 						i, test.expectedLines[i], lines[i])
 				}
 			}
+			ted.removeDummyFile(path)
 		})
 	}
 }
