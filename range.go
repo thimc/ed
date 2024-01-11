@@ -45,14 +45,14 @@ func (ed *Editor) Range() (int, error) {
 			ed.nextToken()
 			var search string = ed.scanString()
 			if search == string(mod) || search == "" {
-				if ed.Search == "" {
+				if ed.search == "" {
 					return 0, ErrNoPrevPattern
 				}
-				search = ed.Search
+				search = ed.search
 			} else if search[len(search)-1] == byte(mod) {
 				search = search[:len(search)-1]
 			}
-			ed.Search = search
+			ed.search = search
 			var s int = ed.End - 1
 			var e = len(ed.Lines)
 			if mod == '?' {
@@ -80,30 +80,21 @@ func (ed *Editor) Range() (int, error) {
 			return 0, ErrNoMatch
 		case ed.token() == '\'':
 			ed.nextToken()
-			var buf string = ed.scanString()
-			switch len(buf) {
-			case 1:
-				break
-			case 0:
-				fallthrough
-			default:
-				return 0, ErrInvalidCmdSuffix
-			}
-			var r rune = rune(buf[0])
-			if !unicode.IsLower(r) {
+			var r rune = ed.token()
+			ed.nextToken()
+			if r == scanner.EOF || !unicode.IsLower(r) {
 				return 0, ErrInvalidMark
 			}
-			var mark int = int(byte(buf[0])) - 'a'
-			if mark >= len(ed.Mark) {
+			var mark int = int(r) - 'a'
+			if mark < 0 || mark > len(ed.mark) {
 				return 0, ErrInvalidMark
 			}
-			var maddr int = ed.Mark[mark]
-			if maddr < 1 || maddr > len(ed.Lines) {
+			var maddr int = ed.mark[mark]
+			if maddr <= 0 || maddr > len(ed.Lines) {
 				return 0, ErrInvalidAddress
 			}
-			ed.End = maddr
-			ed.Start = maddr
 			ed.addr = maddr
+			ed.dump()
 		case ed.token() == '+':
 			fallthrough
 		case ed.token() == '-':
@@ -160,7 +151,7 @@ func (ed *Editor) Range() (int, error) {
 					ed.Dot = len(ed.Lines)
 					ed.addr = ed.Dot
 					ed.End = ed.Dot
-					ed.addrcount = 2
+					ed.addrCount = 2
 					return -1, nil
 				}
 				continue
@@ -178,7 +169,7 @@ func (ed *Editor) Range() (int, error) {
 func (ed *Editor) DoRange() error {
 	var n int
 	var err error
-	ed.addrcount = 0
+	ed.addrCount = 0
 	ed.Start = ed.Dot
 	ed.End = ed.Dot
 	if ed.token() == scanner.EOF {
@@ -193,7 +184,7 @@ func (ed *Editor) DoRange() error {
 			return err
 		}
 		ed.addr = n
-		ed.addrcount++
+		ed.addrCount++
 		ed.Start = ed.End
 		ed.End = ed.addr
 		if ed.token() != ',' && ed.token() != ';' {
@@ -206,7 +197,7 @@ func (ed *Editor) DoRange() error {
 		}
 	}
 end:
-	if ed.addrcount == 1 || ed.End != ed.addr {
+	if ed.addrCount == 1 || ed.End != ed.addr {
 		ed.Start = ed.End
 	}
 	ed.Dot = ed.End

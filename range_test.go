@@ -117,9 +117,9 @@ func TestRange(t *testing.T) {
 			// if ted.Dot != test.expectedDot {
 			// 	t.Errorf("expected dot position %d, got %d", test.expectedDot, ted.Dot)
 			// }
-			if ted.addrcount != test.expectedAddrCount {
+			if ted.addrCount != test.expectedAddrCount {
 				t.Errorf("expected internal address count %d, got %d",
-					test.expectedAddrCount, ted.addrcount)
+					test.expectedAddrCount, ted.addrCount)
 			}
 			if b.String() != test.expectedOutput {
 				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())

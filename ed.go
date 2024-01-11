@@ -44,71 +44,67 @@ var (
 )
 
 type Editor struct {
-	Path  string
-	Dirty bool
-	Lines []string
-	Mark  ['z' - 'a']int // [25]int
-
-	Dot   int
-	Start int
-	End   int
-
-	input     []byte
-	addrcount int
-	addr      int
-	s         scanner.Scanner
-	tok       rune
-
-	Scroll         int
-	Search         string
-	Error          error
-	Prompt         rune
-	Cmd            string
-	globalCmd      string
-	prevSubSearch  string
-	prevSubReplace string
-
-	printErrors bool
-	Silent      bool
-
-	sigch  chan os.Signal
-	sigint bool
-
-	in  io.Reader
-	out io.Writer
-	err io.Writer
+	Path        string          // file path
+	Dirty       bool            // modified
+	Lines       []string        // File buffer
+	mark        [25]int         // a to z
+	Dot         int             // current position
+	Start       int             // start position
+	End         int             // end position
+	input       []byte          // user input
+	addrCount   int             // number of addresses in the current input
+	addr        int             // internal address
+	s           scanner.Scanner // token scanner for the input byte array
+	tok         rune            // current token
+	Error       error           // previous error
+	scroll      int             // previous scroll value
+	search      string          // previous search criteria for /, ? or s
+	replacestr  string          // previous s replacement
+	Prompt      rune            // user prompt
+	shellCmd    string          // previous command for !
+	globalCmd   string          // previous command used by g, G, v and V
+	printErrors bool            // toggle errors
+	Silent      bool            // chatty
+	sigch       chan os.Signal  // signals caught by ed
+	sigint      bool            // if sigint was caught
+	in          io.Reader       // standard input
+	out         io.Writer       // standard output
+	err         io.Writer       // standard error
 }
 
 // NewEditor returns a new Editor.
 func NewEditor(stdin io.Reader, stdout io.Writer, stderr io.Writer) *Editor {
 	ed := Editor{
-		Lines:  []string{},
-		Prompt: defaultPrompt,
-		sigch:  make(chan os.Signal, 1),
-		in:     stdin,
-		out:    stdout,
-		err:    stderr,
+		Lines: []string{},
+		sigch: make(chan os.Signal, 1),
+		in:    stdin,
+		out:   stdout,
+		err:   stderr,
 	}
 	// ed.setupSignals()
 	return &ed
 }
 
-// ReadInput() reads from the in io.Reader until it encounters a newline
+// ReadInput reads from the io.Reader until it encounters a newline
 // symbol (\n') or EOF. After that it sets up the scanner and tokenizer.
 func (ed *Editor) ReadInput(r io.Reader) error {
 	ed.input = []byte{}
 	buf := make([]byte, 1)
+	if ed.Prompt != 0 {
+		fmt.Fprintf(ed.err, "%c", ed.Prompt)
+	}
 	for {
 		n, err := r.Read(buf)
 		if n == 0 {
+			if len(ed.input) == 0 {
+				return errors.New("EOF")
+			}
 			break
 		}
-		ed.input = append(ed.input, buf[0])
 		if buf[0] == '\n' {
 			break
 		}
-		// FIXME: Check the error _after_ the value is
-		// appended to get a "EOF" symbol into the array.
+		ed.input = append(ed.input, buf[0])
 		if err != nil {
 			return err
 		}
@@ -138,7 +134,7 @@ func (ed *Editor) setupSignals() {
 				ed.WriteFile(1, len(ed.Lines), defaultHangupFile)
 			}
 		case syscall.SIGINT:
-			fmt.Fprintf(os.Stderr, "%s\n", ErrDefault)
+			fmt.Fprintf(ed.err, "%s\n", ErrDefault)
 			ed.sigint = true
 		}
 	}()
@@ -232,9 +228,15 @@ func (ed *Editor) Shell(command string) ([]string, error) {
 	cs.Whitespace ^= scanner.GoWhitespace
 	var parsed string
 	var ctok rune = cs.Scan()
+	if ctok == ' ' {
+		ctok = cs.Scan()
+	}
 	for ctok != scanner.EOF {
 		parsed += string(ctok)
 		if ctok != '\\' && cs.Peek() == '%' {
+			if ed.Path == "" {
+				return output, ErrNoFileName
+			}
 			ctok = cs.Scan()
 			parsed += ed.Path
 		}
@@ -260,7 +262,7 @@ func (ed *Editor) Shell(command string) ([]string, error) {
 	if err := s.Err(); err != nil {
 		return output, err
 	}
-	ed.Cmd = command
+	ed.shellCmd = command
 	return output, err
 }
 
@@ -336,7 +338,6 @@ func (ed *Editor) scanNumber() (int, error) {
 		ed.nextToken()
 	}
 	end = ed.s.Position.Offset
-
 	num := string(ed.input[start:end])
 	n, err = strconv.Atoi(num)
 	return n, err
@@ -365,7 +366,7 @@ func (ed *Editor) nextToken() {
 // The internal address value and the address counter is also printed.
 func (ed *Editor) dump() {
 	fmt.Printf("start=%d | end=%d | dot=%d | addr=%d | addrcount=%d | ",
-		ed.Start, ed.End, ed.Dot, ed.addr, ed.addrcount)
+		ed.Start, ed.End, ed.Dot, ed.addr, ed.addrCount)
 	fmt.Printf("offset=%d | eof=%t | token='%c' | ",
 		ed.s.Pos().Offset, ed.token() == scanner.EOF, ed.token())
 	fmt.Printf("buffer_len=%d\n", len(ed.Lines))

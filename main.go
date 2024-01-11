@@ -11,14 +11,14 @@ var (
 	promptFlag   = flag.Bool("p", false, "toggles the prompt")
 	suppressFlag = flag.Bool("s", false, "suppress diagnostics")
 )
-var ed *Editor
 
-func printError(err error) bool {
+func (ed *Editor) printError(err error) bool {
 	if err != nil {
 		ed.Error = err
-		fmt.Fprintf(os.Stderr, "%s\n", err)
 		if ed.printErrors {
-			fmt.Fprintf(os.Stderr, "%s\n", ErrDefault)
+			fmt.Fprintf(ed.err, "%s\n", err)
+		} else {
+			fmt.Fprintf(ed.err, "%s\n", ErrDefault)
 		}
 		return true
 	}
@@ -26,6 +26,7 @@ func printError(err error) bool {
 }
 
 func main() {
+	var ed *Editor
 	flag.Parse()
 	ed = NewEditor(os.Stdin, os.Stdout, os.Stderr)
 	if !*debugFlag {
@@ -38,21 +39,18 @@ func main() {
 	if len(args) == 1 {
 		var err error
 		ed.Lines, err = ed.ReadFile(args[0])
-		if !printError(err) {
+		if !ed.printError(err) {
 			ed.Path = args[0]
 		}
 	}
 	for {
-		if ed.Prompt != 0 {
-			fmt.Fprintf(os.Stderr, "%c", ed.Prompt)
-		}
 		if err := ed.ReadInput(os.Stdin); err != nil {
-			panic(err)
+			break
 		}
-		if printError(ed.DoRange()) {
+		if ed.printError(ed.DoRange()) {
 			continue
 		}
-		if printError(ed.DoCommand()) {
+		if ed.printError(ed.DoCommand()) {
 			continue
 		}
 	}

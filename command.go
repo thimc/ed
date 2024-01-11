@@ -32,13 +32,12 @@ func (ed *Editor) DoCommand() error {
 				continue
 			}
 			ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
-			ed.Dirty = true
 			ed.End++
+			ed.Dirty = true
 		}
 		ed.Start = ed.End
 		return nil
 	case 'c':
-		ed.Dirty = true
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		ed.End = ed.Start - 1
 		for {
@@ -53,12 +52,12 @@ func (ed *Editor) DoCommand() error {
 			ed.Lines = append(ed.Lines[:ed.End+1], ed.Lines[ed.End:]...)
 			ed.Lines[ed.End] = line
 			ed.End++
+			ed.Dirty = true
 		}
 		ed.Start = ed.End
 		ed.Dot = ed.End
 		return nil
 	case 'd':
-		ed.Dirty = true
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		if ed.Start > len(ed.Lines) {
 			ed.Start = len(ed.Lines)
@@ -66,6 +65,7 @@ func (ed *Editor) DoCommand() error {
 		ed.Dot = ed.Start
 		ed.End = ed.Dot
 		ed.Start = ed.Dot
+		ed.Dirty = true
 		return nil
 	case 'E':
 		fallthrough
@@ -82,8 +82,8 @@ func (ed *Editor) DoCommand() error {
 		var fname string = ed.scanString()
 		switch cmd {
 		case true:
-			if fname == "" && ed.Cmd != "" {
-				fname = ed.Cmd
+			if fname == "" && ed.shellCmd != "" {
+				fname = ed.shellCmd
 			}
 			lines, err := ed.Shell(fname)
 			if err != nil {
@@ -116,6 +116,7 @@ func (ed *Editor) DoCommand() error {
 				return err
 			}
 		}
+		ed.Dirty = true
 		return nil
 	case 'f':
 		ed.nextToken()
@@ -245,24 +246,16 @@ func (ed *Editor) DoCommand() error {
 		return nil
 	case 'k':
 		ed.nextToken()
-		var buf string = ed.scanString()
-		switch len(buf) {
-		case 1:
-			break
-		case 0:
-			fallthrough
-		default:
-			return ErrInvalidCmdSuffix
-		}
-		var r rune = rune(buf[0])
-		if !unicode.IsLower(r) {
+		var r rune = ed.token()
+		ed.nextToken()
+		if r == scanner.EOF || !unicode.IsLower(r) {
 			return ErrInvalidMark
 		}
-		var mark int = int(byte(buf[0])) - 'a'
-		if mark >= len(ed.Mark) {
+		var mark int = int(r) - 'a'
+		if mark < 0 || mark > len(ed.mark) {
 			return ErrInvalidMark
 		}
-		ed.Mark[int(mark)] = ed.End
+		ed.mark[mark] = ed.End
 		return nil
 	case 'm':
 		var err error
@@ -286,6 +279,7 @@ func (ed *Editor) DoCommand() error {
 		ed.Lines = append(ed.Lines[:dst-len(lines)], append(lines, ed.Lines[dst-len(lines):]...)...)
 		ed.End = dst
 		ed.Start = ed.End
+		ed.Dirty = true
 		return nil
 	case 'l':
 		fallthrough
@@ -370,26 +364,26 @@ func (ed *Editor) DoCommand() error {
 		return nil
 	case 's':
 		ed.nextToken()
-		var search, replacement string
+		var search, repl string
 		var mod rune
 		var re *regexp.Regexp
 		var err error
 		ed.nextToken()
 		if ed.token() == scanner.EOF {
-			if ed.prevSubSearch == "" && ed.prevSubReplace == "" {
+			if ed.search == "" && ed.replacestr == "" {
 				return ErrNoPreviousSub
 			}
-			search = ed.prevSubSearch
-			replacement = ed.prevSubReplace
+			search = ed.search
+			repl = ed.replacestr
 		}
 		search = ed.scanStringUntil('/')
 		ed.nextToken()
 		if ed.token() != scanner.EOF {
-			replacement = ed.scanStringUntil('/')
+			repl = ed.scanStringUntil('/')
 			ed.nextToken()
 		}
-		if replacement == "%" && ed.prevSubReplace != "" {
-			replacement = ed.prevSubReplace
+		if repl == "%" && ed.replacestr != "" {
+			repl = ed.replacestr
 		}
 		if ed.token() != scanner.EOF {
 			mod = ed.token()
@@ -416,18 +410,46 @@ func (ed *Editor) DoCommand() error {
 			n = N
 			if re.MatchString(ed.Lines[i]) {
 				match = true
+				submatch := re.FindAllStringSubmatch(ed.Lines[i], -1)
+				// TODO: Fix submatches
 				ed.Lines[i] = re.ReplaceAllStringFunc(ed.Lines[i], func(s string) string {
+					var cs scanner.Scanner
+					cs.Init(strings.NewReader(repl))
+					cs.Mode = scanner.ScanChars
+					cs.Whitespace ^= scanner.GoWhitespace
+					var prepl string
+					var ctok rune = cs.Scan()
+					for ctok != scanner.EOF {
+						if ctok != '\\' && cs.Peek() == '&' {
+							prepl += string(ctok)
+							ctok = cs.Scan()
+							ctok = cs.Scan()
+							prepl += s
+							continue
+						} else if ctok == '\\' && unicode.IsDigit(cs.Peek()) {
+							ctok = cs.Scan()
+							n, err := strconv.Atoi(string(ctok))
+							if err == nil && n-1 >= 0 && n-1 < len(submatch[0]) {
+								ctok = cs.Scan()
+								prepl += submatch[0][n-1]
+							}
+							continue
+						}
+						prepl += string(ctok)
+						ctok = cs.Scan()
+					}
 					n--
 					if all {
 						n = 0
 					}
 					if n == 0 {
-						return replacement
+						return prepl
 					}
 					return s
 				})
 				ed.End = i + 1
 				ed.Start = i + 1
+				ed.Dirty = true
 			}
 		}
 		if !match {
@@ -454,6 +476,7 @@ func (ed *Editor) DoCommand() error {
 		ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
 		ed.End = dst + len(lines)
 		ed.Start = ed.End
+		ed.Dirty = true
 		return nil
 	case 'u':
 		return fmt.Errorf("TODO: u (undo) not implemented")
@@ -503,7 +526,7 @@ func (ed *Editor) DoCommand() error {
 		var scroll int
 		scroll, err = ed.scanNumber()
 		if err != nil || scroll == 0 {
-			scroll = ed.Scroll
+			scroll = ed.scroll
 		}
 		if ed.End-1 < 0 {
 			return ErrInvalidAddress
@@ -521,7 +544,7 @@ func (ed *Editor) DoCommand() error {
 		ed.Start++
 		ed.End++
 		ed.Dot = ed.Start + 1
-		ed.Scroll = scroll
+		ed.scroll = scroll
 		return nil
 	case '=':
 		fmt.Fprintf(ed.out, "%d\n", len(ed.Lines))
@@ -531,8 +554,8 @@ func (ed *Editor) DoCommand() error {
 		ed.skipWhitespace()
 		var buf string
 		if ed.token() == scanner.EOF {
-			if ed.Cmd != "" {
-				buf = ed.Cmd
+			if ed.shellCmd != "" {
+				buf = ed.shellCmd
 			} else {
 				return ErrNoCmd
 			}

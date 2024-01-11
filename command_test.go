@@ -575,6 +575,11 @@ func TestCmdMark(t *testing.T) {
 			expectedStart: []int{2, 5},
 			expectedEnd:   []int{5, 5},
 		},
+		{
+			input:         [][]byte{[]byte("1ka"), []byte("5kb"), []byte("'a,'b")},
+			expectedStart: []int{1, 5, 1},
+			expectedEnd:   []int{1, 5, 5},
+		},
 	}
 	for _, test := range tests {
 		t.Run(string(bytes.Join(test.input, []byte(" "))), func(t *testing.T) {
