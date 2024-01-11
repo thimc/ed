@@ -268,7 +268,51 @@ func TestCmdDeleteLines(t *testing.T) {
 
 // TestCmdEdit tests the edit (e) command.
 func TestCmdEdit(t *testing.T) {
-	// TODO: TestCmdEdit
+	var path string = "dummy"
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	ted.createDummyFile(path)
+	defer ted.removeDummyFile(path)
+	tests := []struct {
+		input          []byte
+		expectedOutput string
+		expectedStart  int
+		expectedEnd    int
+	}{
+		{
+			input:          []byte("e " + path),
+			expectedOutput: "52\n",
+			expectedStart:  26,
+			expectedEnd:    26,
+		},
+		{
+			input:          []byte("e !ls main.go"),
+			expectedOutput: "8\n",
+			expectedStart:  1,
+			expectedEnd:    1,
+		},
+	}
+	for _, test := range tests {
+		t.Run(string(test.input), func(t *testing.T) {
+			var b bytes.Buffer
+			ted.err = &b
+			ted.ReadInput(bytes.NewBuffer(test.input))
+			if err := ted.DoRange(); err != nil {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if err := ted.DoCommand(); err != nil {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if b.String() != test.expectedOutput {
+				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
+			}
+		})
+	}
 }
 
 // TestCmdFile tests the file name (f) command.
