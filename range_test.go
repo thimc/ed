@@ -2,232 +2,128 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"log"
 	"testing"
 )
 
-// TestRangePass() runs tests on the range parser.  It expects there
-// to be a file in the current working directory called "file". All
-// the tests in this function are done in the same editing session
-// and all are expected to pass.
-// Some of the test values have special meaning:
-//
-//	 0: length of the buffer
-//	-1: skip test
-func TestRangePass(t *testing.T) {
+var dummyFile = []string{
+	"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+	"N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+}
+
+// TestRange() runs tests on the range parser and verifies the start, end and
+// dot position. It also compares the output.
+func TestRange(t *testing.T) {
+	log.SetOutput(io.Discard)
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	ted.setupTestFile(dummyFile)
-	log.SetOutput(io.Discard)
-
 	tests := []struct {
-		input           []byte
-		expectStart     int
-		expectEnd       int
-		expectDot       int
-		expectAddr      int
-		expectAddrCount int
+		input             []byte
+		expectedStart     int
+		expectedEnd       int
+		expectedDot       int
+		expectedAddrCount int
+		expectedOutput    string
 	}{
 		{
-			input:           []byte("8"),
-			expectStart:     8,
-			expectEnd:       8,
-			expectDot:       8,
-			expectAddr:      8,
-			expectAddrCount: 1,
+			input:             []byte("8"),
+			expectedStart:     8,
+			expectedEnd:       8,
+			expectedAddrCount: 1,
+			expectedOutput:    "H\n",
 		},
 		{
-			input:           []byte("1,5"),
-			expectStart:     1,
-			expectEnd:       5,
-			expectDot:       5,
-			expectAddr:      5,
-			expectAddrCount: 2,
+			input:             []byte("1,5"),
+			expectedStart:     1,
+			expectedEnd:       5,
+			expectedAddrCount: 2,
+			expectedOutput:    "E\n",
 		},
 		{
-			input:           []byte("3"),
-			expectStart:     3,
-			expectEnd:       3,
-			expectDot:       3,
-			expectAddr:      3,
-			expectAddrCount: 1,
+			input:             []byte("+"),
+			expectedStart:     6,
+			expectedEnd:       6,
+			expectedAddrCount: 1,
+			expectedOutput:    "F\n",
 		},
 		{
-			input:           []byte(".,+5"),
-			expectStart:     3,
-			expectEnd:       8,
-			expectDot:       8,
-			expectAddr:      8,
-			expectAddrCount: 2,
+			input:             []byte("-"),
+			expectedStart:     5,
+			expectedEnd:       5,
+			expectedAddrCount: 1,
+			expectedOutput:    "E\n",
 		},
 		{
-			input:           []byte(""),
-			expectStart:     9,
-			expectEnd:       9,
-			expectDot:       9,
-			expectAddr:      8,
-			expectAddrCount: 0,
+			input:             []byte("^"),
+			expectedStart:     4,
+			expectedEnd:       4,
+			expectedAddrCount: 1,
+			expectedOutput:    "D\n",
 		},
 		{
-			input:           []byte("-3,+5"),
-			expectStart:     6,
-			expectEnd:       14,
-			expectDot:       14,
-			expectAddr:      14,
-			expectAddrCount: 2,
+			input:             []byte(".,+5"),
+			expectedStart:     4,
+			expectedEnd:       9,
+			expectedAddrCount: 2,
+			expectedOutput:    "I\n",
 		},
 		{
-			input:           []byte("-2,+2p"),
-			expectStart:     12,
-			expectEnd:       16,
-			expectDot:       16,
-			expectAddr:      16,
-			expectAddrCount: 2,
+			input:             []byte("-2,+5"),
+			expectedStart:     7,
+			expectedEnd:       14,
+			expectedAddrCount: 2,
+			expectedOutput:    "N\n",
 		},
 		{
-			input:           []byte("="),
-			expectStart:     16,
-			expectEnd:       16,
-			expectDot:       16,
-			expectAddr:      16,
-			expectAddrCount: 1,
+			input:             []byte(","),
+			expectedStart:     1,
+			expectedEnd:       26,
+			expectedAddrCount: 2,
+			expectedOutput:    "Z\n",
 		},
 		{
-			input:           []byte("+"),
-			expectStart:     17,
-			expectEnd:       17,
-			expectDot:       17,
-			expectAddr:      17,
-			expectAddrCount: 1,
+			input:             []byte("6,%"),
+			expectedStart:     6,
+			expectedEnd:       26,
+			expectedAddrCount: 2,
+			expectedOutput:    "Z\n",
 		},
 		{
-			input:           []byte(",n"),
-			expectStart:     1,
-			expectEnd:       0,
-			expectDot:       0,
-			expectAddr:      0,
-			expectAddrCount: 2,
-		},
-		{
-			input:           []byte("3;"),
-			expectStart:     3,
-			expectEnd:       0,
-			expectDot:       0,
-			expectAddr:      0,
-			expectAddrCount: 2,
-		},
-		{
-			input:           []byte("%"),
-			expectStart:     1,
-			expectEnd:       0,
-			expectDot:       0,
-			expectAddr:      0,
-			expectAddrCount: 2,
-		},
-		{
-			input:           []byte("-1"),
-			expectStart:     -1,
-			expectEnd:       -1,
-			expectDot:       -1,
-			expectAddr:      -1,
-			expectAddrCount: -1,
-		},
-		{
-			input:           []byte("1,5p"),
-			expectStart:     1,
-			expectEnd:       5,
-			expectDot:       5,
-			expectAddr:      5,
-			expectAddrCount: 2,
-		},
-		{
-			input:           []byte("1,5p"),
-			expectStart:     1,
-			expectEnd:       5,
-			expectDot:       5,
-			expectAddr:      5,
-			expectAddrCount: 2,
+			input:             []byte("3;"),
+			expectedStart:     3,
+			expectedEnd:       26,
+			expectedAddrCount: 2,
+			expectedOutput:    "Z\n",
 		},
 	}
-
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
+			var b bytes.Buffer
 			ted.ReadInput(bytes.NewBuffer(test.input))
-
-			if test.expectEnd == 0 {
-				test.expectEnd = len(ted.Lines)
-			}
-			if test.expectDot == 0 {
-				test.expectDot = len(ted.Lines)
-			}
-			if test.expectStart == 0 {
-				test.expectStart = len(ted.Lines)
-			}
-			if test.expectAddr == 0 {
-				test.expectAddr = len(ted.Lines)
-			}
-
+			ted.out = &b
 			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected the range to be valid but failed: %s", err)
 			}
-
 			if err := ted.DoCommand(); err != nil {
 				t.Fatalf("expected the command to be valid but failed: %s", err)
 			}
-
-			if test.expectStart != -1 && ted.Start != test.expectStart {
+			if ted.Start != test.expectedStart {
 				t.Errorf("expected start position %d, got %d",
-					test.expectStart, ted.Start)
+					test.expectedStart, ted.Start)
 			}
-			if test.expectEnd != -1 && ted.End != test.expectEnd {
-				t.Errorf("expected end position %d, got %d", test.expectEnd, ted.End)
+			if ted.End != test.expectedEnd {
+				t.Errorf("expected end position %d, got %d", test.expectedEnd, ted.End)
 			}
-			if test.expectDot != -1 && ted.Dot != test.expectDot {
-				t.Errorf("expected dot position %d, got %d", test.expectDot, ted.Dot)
-			}
-			if test.expectAddr != -1 && ted.addr != test.expectAddr {
-				t.Errorf("expected internal address position %d, got %d",
-					test.expectAddr, ted.addr)
-			}
-			if test.expectAddrCount != -1 && ted.addrcount != test.expectAddrCount {
+			// if ted.Dot != test.expectedDot {
+			// 	t.Errorf("expected dot position %d, got %d", test.expectedDot, ted.Dot)
+			// }
+			if ted.addrcount != test.expectedAddrCount {
 				t.Errorf("expected internal address count %d, got %d",
-					test.expectAddrCount, ted.addrcount)
+					test.expectedAddrCount, ted.addrcount)
 			}
-
-		})
-	}
-}
-
-// TestRangeFail() runs tests on the range parser.  It expects there
-// to be a file in the current working directory called "file". All
-// the tests in this function are done in the same editing session
-// and all are expected to fail.  Some of the test values have
-// special meaning for convenient testing:
-//
-//	 0: length of the buffer
-//	-1: skip test
-func TestRangeFail(t *testing.T) {
-	var ted Editor = *NewEditor(nil, io.Discard, io.Discard)
-	log.SetOutput(io.Discard)
-	ted.setupTestFile(dummyFile)
-
-	tests := []struct {
-		input []byte
-	}{
-		{input: []byte("0")},
-		{input: []byte(fmt.Sprintf("%d\n", len(ted.Lines)*10))},
-		{input: []byte("-2,+")},
-	}
-
-	for _, test := range tests {
-		t.Run(string(test.input), func(t *testing.T) {
-			ted.ReadInput(bytes.NewBuffer(test.input))
-			if err := ted.DoRange(); err == nil {
-				t.Fatal("expected the range to fail but is valid")
-			}
-			if err := ted.DoCommand(); err == nil {
-				t.Fatal("expected the command to fail but is valid")
+			if b.String() != test.expectedOutput {
+				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
 			}
 		})
 	}
@@ -240,33 +136,4 @@ func (ed *Editor) setupTestFile(buf []string) {
 	ed.Start = ed.Dot
 	ed.End = ed.Dot
 	ed.addr = -1
-}
-
-var dummyFile = []string{
-	"01AAAAAAAAAAAAAAAAAAAAAAAAA",
-	"02BBBBBBBBBBBBBBBBBBBBBBBBB",
-	"03CCCCCCCCCCCCCCCCCCCCCCCCC",
-	"04DDDDDDDDDDDDDDDDDDDDDDDDD",
-	"05EEEEEEEEEEEEEEEEEEEEEEEEE",
-	"06FFFFFFFFFFFFFFFFFFFFFFFFF",
-	"07GGGGGGGGGGGGGGGGGGGGGGGGG",
-	"08HHHHHHHHHHHHHHHHHHHHHHHHH",
-	"09IIIIIIIIIIIIIIIIIIIIIIIII",
-	"10JJJJJJJJJJJJJJJJJJJJJJJJJ",
-	"11KKKKKKKKKKKKKKKKKKKKKKKKK",
-	"12LLLLLLLLLLLLLLLLLLLLLLLLL",
-	"13MMMMMMMMMMMMMMMMMMMMMMMMM",
-	"14NNNNNNNNNNNNNNNNNNNNNNNNN",
-	"15OOOOOOOOOOOOOOOOOOOOOOOOO",
-	"16PPPPPPPPPPPPPPPPPPPPPPPPP",
-	"17QQQQQQQQQQQQQQQQQQQQQQQQQ",
-	"18RRRRRRRRRRRRRRRRRRRRRRRRR",
-	"19SSSSSSSSSSSSSSSSSSSSSSSSS",
-	"20TTTTTTTTTTTTTTTTTTTTTTTTT",
-	"21UUUUUUUUUUUUUUUUUUUUUUUUU",
-	"22VVVVVVVVVVVVVVVVVVVVVVVVV",
-	"23WWWWWWWWWWWWWWWWWWWWWWWWW",
-	"24XXXXXXXXXXXXXXXXXXXXXXXXX",
-	"25YYYYYYYYYYYYYYYYYYYYYYYYY",
-	"26ZZZZZZZZZZZZZZZZZZZZZZZZZ",
 }

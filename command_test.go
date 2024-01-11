@@ -10,8 +10,8 @@ import (
 
 // TestCmdAppendLines tests the append (a) command.
 func TestCmdAppendLines(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
 		data           string
@@ -83,8 +83,8 @@ func TestCmdAppendLines(t *testing.T) {
 
 // TestCmdBang tests the shell ! command.
 func TestCmdBang(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
 		expectError    bool
@@ -134,8 +134,8 @@ func TestCmdBang(t *testing.T) {
 
 // TestCmdChangeLines tests the change (c) command.
 func TestCmdChangeLines(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
 		data           string
@@ -206,8 +206,8 @@ func TestCmdChangeLines(t *testing.T) {
 
 // TestCmdDeleteLines tests the delete (d) command.
 func TestCmdDeleteLines(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
 		expectError    bool
@@ -273,18 +273,20 @@ func TestCmdDeleteLines(t *testing.T) {
 
 // TestCmdEdit tests the edit (e) command.
 func TestCmdEdit(t *testing.T) {
+	log.SetOutput(io.Discard)
 	// TODO: TestCmdEdit
 }
 
 // TestCmdFile tests the file name (f) command.
 func TestCmdFile(t *testing.T) {
+	log.SetOutput(io.Discard)
 	// TODO: TestCmdFile
 }
 
 // TestCmdGlobal tests the global (g) and inverse global (v) command.
 func TestCmdGlobal(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
 		expectError    bool
@@ -402,8 +404,8 @@ func TestCmdGlobal(t *testing.T) {
 
 // TestCmdInsertLines tests the insert (i) command.
 func TestCmdInsertLines(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
 		data           string
@@ -474,8 +476,8 @@ func TestCmdInsertLines(t *testing.T) {
 
 // TestCmdJoinLines tests the join (j) command.
 func TestCmdJoinLines(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
 		expectError    bool
@@ -527,8 +529,8 @@ func TestCmdJoinLines(t *testing.T) {
 
 // TestCmdMark tests the mark (k) command and the ' address symbol.
 func TestCmdMark(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	ted.setupTestFile(dummyFile)
 	tests := []struct {
 		input         [][]byte
@@ -576,8 +578,8 @@ func TestCmdMark(t *testing.T) {
 
 // TestCmdMoveLines tests the movement (m) command.
 func TestCmdMoveLines(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
 		expectError    bool
@@ -672,14 +674,15 @@ func TestCmdMoveLines(t *testing.T) {
 
 // TestCmdPrintLastError tests the print last error (h) command.
 func TestCmdPrintLastError(t *testing.T) {
+	log.SetOutput(io.Discard)
 	// TODO: TestCmdPrintLastError
 }
 
 // TestCmdPrintTotalLines tests the total lines (=) command.
 func TestCmdPrintTotalLines(t *testing.T) {
+	log.SetOutput(io.Discard)
 	// TODO: TestCmdPrintTotalLines
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
-	log.SetOutput(io.Discard)
 	tests := []struct {
 		input          []byte
 		buffer         []string
@@ -742,11 +745,10 @@ func TestCmdPrintTotalLines(t *testing.T) {
 	}
 }
 
-
 // TestCmdPrintLines tests all the print commands (p, l, n).
 func TestCmdPrintLines(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
 		buffer         []string
@@ -883,18 +885,20 @@ func TestCmdPrintLines(t *testing.T) {
 
 // TestCmdRead tests the read (r) command.
 func TestCmdRead(t *testing.T) {
+	log.SetOutput(io.Discard)
 	// TODO: TestCmdRead
 }
 
 // TestCmdScroll tests the scroll (z) command.
 func TestCmdScroll(t *testing.T) {
+	log.SetOutput(io.Discard)
 	// TODO: TestCmdScroll
 }
 
 // TestCmdSubstitute tests the substitute (s) command.
 func TestCmdSubstitute(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
 		expectError    bool
@@ -982,18 +986,20 @@ func TestCmdSubstitute(t *testing.T) {
 
 // TestCmdToggleError tests the toggle error (H) command.
 func TestCmdToggleError(t *testing.T) {
+	log.SetOutput(io.Discard)
 	// TODO: TestCmdToggleError
 }
 
 // TestCmdTogglePrompt tests the toggle prompt (P) command.
 func TestCmdTogglePrompt(t *testing.T) {
+	log.SetOutput(io.Discard)
 	// TODO: TestCmdTogglePrompt
 }
 
 // TestCmdTransferLines tests the transfer (t) command.
 func TestCmdTransferLines(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	log.SetOutput(io.Discard)
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
 		expectError    bool
@@ -1085,7 +1091,14 @@ func TestCmdTransferLines(t *testing.T) {
 	}
 }
 
+// TestCmdUndo tests the undo (u) command.
+func TestCmdUndo(*testing.T) {
+	log.SetOutput(io.Discard)
+	// TODO: TestCmdUndo
+}
+
 // TestCmdWrite tests the write commands (w, wq, W).
 func TestCmdWrite(t *testing.T) {
+	log.SetOutput(io.Discard)
 	// TODO: TestCmdWrite
 }
