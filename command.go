@@ -327,7 +327,6 @@ func (ed *Editor) DoCommand() error {
 		ed.nextToken()
 		ed.skipWhitespace()
 		var fname string = ed.scanString()
-		var bufsiz int
 		if fname == "" {
 			if ed.Path == "" {
 				return ErrNoFileName
@@ -336,7 +335,8 @@ func (ed *Editor) DoCommand() error {
 		}
 		var lines []string
 		var err error
-		if fname[0] == '!' {
+		var cmd bool = (fname[0] == '!')
+		if cmd {
 			var bufsiz int
 			lines, err = ed.Shell(fname[1:])
 			if err != nil {
@@ -346,6 +346,9 @@ func (ed *Editor) DoCommand() error {
 			for _, ln := range lines {
 				bufsiz += int(len(ln) + 1)
 			}
+			if !ed.Silent {
+				fmt.Fprintf(ed.err, "%d\n", bufsiz)
+			}
 		} else {
 			lines, err = ed.ReadFile(fname)
 			if err != nil {
@@ -353,18 +356,17 @@ func (ed *Editor) DoCommand() error {
 			}
 		}
 		for _, line := range lines {
-			if len(ed.Lines) == ed.End {
+			if len(ed.Lines) < len(lines) {
 				ed.Lines = append(ed.Lines, line)
+				ed.Start++
 				ed.End++
 				continue
 			}
-			ed.Lines = append(ed.Lines[:ed.End+1], ed.Lines[ed.End:]...)
-			ed.Lines[ed.End] = line
+			ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
+			ed.Dirty = true
+			ed.End++
 		}
 		ed.Start = ed.End
-		if !ed.Silent {
-			fmt.Fprintf(ed.err, "%d\n", bufsiz)
-		}
 		return nil
 	case 's':
 		ed.nextToken()
