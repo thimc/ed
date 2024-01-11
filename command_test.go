@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -53,7 +54,6 @@ func TestCmdAppendLines(t *testing.T) {
 			}
 			if err := ted.DoCommand(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
-
 			}
 			if len(test.expectedBuffer) != len(ted.Lines) {
 				t.Fatalf("expected the total line count to be %d, got %d",
@@ -678,7 +678,6 @@ func TestCmdPrintLastError(t *testing.T) {
 
 // TestCmdPrintTotalLines tests the total lines (=) command.
 func TestCmdPrintTotalLines(t *testing.T) {
-	// TODO: TestCmdPrintTotalLines
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
@@ -856,7 +855,58 @@ func TestCmdPrintLines(t *testing.T) {
 
 // TestCmdRead tests the read (r) command.
 func TestCmdRead(t *testing.T) {
-	// TODO: TestCmdRead
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	var path string = "dummy"
+	ted.createDummyFile(path)
+	defer ted.removeDummyFile(path)
+	tests := []struct {
+		input              []byte
+		expectedOutput     string
+		expectedStart      int
+		expectedEnd        int
+		expectedTotalLines int
+	}{
+		{
+			input:              []byte("r " + path),
+			expectedOutput:     "52\n",
+			expectedStart:      52,
+			expectedEnd:        52,
+			expectedTotalLines: 52,
+		},
+		{
+			input:              []byte("r !ls main.go"),
+			expectedOutput:     "8\n",
+			expectedStart:      27,
+			expectedEnd:        27,
+			expectedTotalLines: 27,
+		},
+	}
+	for _, test := range tests {
+		t.Run(string(test.input), func(t *testing.T) {
+			var b bytes.Buffer
+			ted.err = &b
+			ted.setupTestFile(dummyFile)
+			ted.ReadInput(bytes.NewBuffer(test.input))
+			if err := ted.DoRange(); err != nil {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if err := ted.DoCommand(); err != nil {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if b.String() != test.expectedOutput {
+				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
+			}
+			if test.expectedTotalLines != len(ted.Lines) {
+				t.Fatalf("expected the total lines to be %d, got %d", test.expectedTotalLines, len(ted.Lines))
+			}
+		})
+	}
 }
 
 // TestCmdScroll tests the scroll (z) command.
@@ -1108,5 +1158,67 @@ func TestCmdUndo(*testing.T) {
 
 // TestCmdWrite tests the write commands (w, wq, W).
 func TestCmdWrite(t *testing.T) {
-	// TODO: TestCmdWrite
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	var path string = "dummy"
+	if _, err := os.Stat(path); err == nil {
+		ted.removeDummyFile(path)
+	}
+	// TODO: write commands should not change the start and end position.
+	tests := []struct {
+		input          []byte
+		buffer         []string
+		expectedOutput string
+		expectedStart  int
+		expectedEnd    int
+		expectedLines  []string
+	}{
+		{
+			input:          []byte("w " + path),
+			expectedOutput: "52\n",
+			expectedStart:  26,
+			expectedEnd:    26,
+			expectedLines:  dummyFile,
+		},
+		{
+			input:          []byte("10W " + path),
+			expectedOutput: "2\n",
+			expectedStart:  26,
+			expectedEnd:    26,
+			expectedLines:  []string{"J"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(string(test.input), func(t *testing.T) {
+			var b bytes.Buffer
+			ted.err = &b
+			ted.removeDummyFile(path)
+			ted.setupTestFile(dummyFile)
+			ted.ReadInput(bytes.NewBuffer(test.input))
+			if err := ted.DoRange(); err != nil {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if err := ted.DoCommand(); err != nil {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if b.String() != test.expectedOutput {
+				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
+			}
+			// if test.expectedStart != ted.Start {
+			// 	t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			// }
+			// if test.expectedEnd != ted.End {
+			// 	t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
+			// }
+			lines, err := ted.ReadFile(path)
+			if err != nil {
+				t.Fatalf("expected file '%s' to exist, got error '%s'\n", path, err)
+			}
+			for i := 0; i < len(lines); i++ {
+				if lines[i] != test.expectedLines[i] {
+					t.Errorf("expected line %d to be '%s', got '%s'",
+						i, test.expectedLines[i], lines[i])
+				}
+			}
+		})
+	}
 }
