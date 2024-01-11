@@ -13,7 +13,6 @@ func TestCmdAppendLines(t *testing.T) {
 	tests := []struct {
 		input          []byte
 		data           string
-		expectError    bool
 		buffer         []string
 		expectedBuffer []string
 		expectedStart  int
@@ -22,7 +21,6 @@ func TestCmdAppendLines(t *testing.T) {
 		{
 			input:          []byte("1,3a"),
 			data:           "A\nB\nC\n.\n",
-			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world", "!", "A", "B", "C"},
 			expectedStart:  6,
@@ -31,7 +29,6 @@ func TestCmdAppendLines(t *testing.T) {
 		{
 			input:          []byte("2a"),
 			data:           "A\nB\nC\n.\n",
-			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world", "A", "B", "C", "!"},
 			expectedStart:  5,
@@ -40,7 +37,6 @@ func TestCmdAppendLines(t *testing.T) {
 		{
 			input:          []byte("a"),
 			data:           "appended\n.\n",
-			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world", "!", "appended"},
 			expectedStart:  4,
@@ -52,10 +48,10 @@ func TestCmdAppendLines(t *testing.T) {
 			ted.in = strings.NewReader(test.data)
 			ted.setupTestFile(test.buffer)
 			ted.ReadInput(bytes.NewBuffer(test.input))
-			if err := ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err := ted.DoCommand(); err != nil && !test.expectError {
+			if err := ted.DoCommand(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 
 			}
@@ -84,43 +80,39 @@ func TestCmdBang(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
-		expectError    bool
+		expectedError  error
 		expectedOutput string
 	}{
 		{
+			input:         []byte("!"),
+			expectedError: ErrNoCmd,
+		},
+		{
 			input:          []byte("!ls *.go | wc -l"), // probably a bad idea
-			expectError:    false,
+			expectedError:  nil,
 			expectedOutput: "       6\n!\n",
 		},
 		{
 			input:          []byte("!"),
-			expectError:    false,
+			expectedError:  nil,
 			expectedOutput: "       6\n!\n",
 		},
 		{
-			input:       []byte("!!"),
-			expectError: true,
-		},
-		{
 			input:          []byte("! "),
-			expectError:    false,
+			expectedError:  nil,
 			expectedOutput: "       6\n!\n",
 		},
 	}
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
-			var err error
 			var b bytes.Buffer
 			ted.err = &b
 			ted.ReadInput(bytes.NewBuffer(test.input))
-			if err = ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err = ted.DoCommand(); err != nil && !test.expectError {
-				t.Fatalf("expected no error, got %s", err)
-			}
-			if test.expectError && err == nil {
-				t.Fatalf("expected error, got none")
+			if err := ted.DoCommand(); err != test.expectedError {
+				t.Fatalf("expected error '%s', got %s", test.expectedError, err)
 			}
 			if b.String() != test.expectedOutput {
 				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
@@ -135,7 +127,6 @@ func TestCmdChangeLines(t *testing.T) {
 	tests := []struct {
 		input          []byte
 		data           string
-		expectError    bool
 		buffer         []string
 		expectedBuffer []string
 		expectedStart  int
@@ -144,7 +135,6 @@ func TestCmdChangeLines(t *testing.T) {
 		{
 			input:          []byte("1,3c"),
 			data:           "changed\ntext\n.\n",
-			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"changed", "text"},
 			expectedStart:  2,
@@ -153,7 +143,6 @@ func TestCmdChangeLines(t *testing.T) {
 		{
 			input:          []byte("1c"),
 			data:           "changed\n.\n",
-			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"changed", "world", "!"},
 			expectedStart:  1,
@@ -162,7 +151,6 @@ func TestCmdChangeLines(t *testing.T) {
 		{
 			input:          []byte("c"),
 			data:           "changed\n.\n",
-			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world", "changed"},
 			expectedStart:  3,
@@ -174,10 +162,10 @@ func TestCmdChangeLines(t *testing.T) {
 			ted.in = strings.NewReader(test.data)
 			ted.setupTestFile(test.buffer)
 			ted.ReadInput(bytes.NewBuffer(test.input))
-			if err := ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err := ted.DoCommand(); err != nil && !test.expectError {
+			if err := ted.DoCommand(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
 			if len(test.expectedBuffer) != len(ted.Lines) {
@@ -205,7 +193,7 @@ func TestCmdDeleteLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
-		expectError    bool
+		expectedError  error
 		buffer         []string
 		expectedBuffer []string
 		expectedStart  int
@@ -213,7 +201,7 @@ func TestCmdDeleteLines(t *testing.T) {
 	}{
 		{
 			input:          []byte("1,2d"),
-			expectError:    false,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"!"},
 			expectedStart:  1,
@@ -221,7 +209,7 @@ func TestCmdDeleteLines(t *testing.T) {
 		},
 		{
 			input:          []byte("2d"),
-			expectError:    false,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "!"},
 			expectedStart:  2,
@@ -229,7 +217,7 @@ func TestCmdDeleteLines(t *testing.T) {
 		},
 		{
 			input:          []byte("d"),
-			expectError:    true,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world"},
 			expectedStart:  2,
@@ -240,11 +228,11 @@ func TestCmdDeleteLines(t *testing.T) {
 		t.Run(string(test.input), func(t *testing.T) {
 			ted.setupTestFile(test.buffer)
 			ted.ReadInput(bytes.NewBuffer(test.input))
-			if err := ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err := ted.DoCommand(); err != nil && !test.expectError {
-				t.Fatalf("expected no error, got %s", err)
+			if err := ted.DoCommand(); err != test.expectedError {
+				t.Fatalf("expected error '%s', got %s", test.expectedError, err)
 			}
 			if len(test.expectedBuffer) != len(ted.Lines) {
 				t.Fatalf("expected the total line count to be %d, got %d",
@@ -350,7 +338,6 @@ func TestCmdGlobal(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
-		expectError    bool
 		buffer         []string
 		expectedBuffer []string
 		expectedStart  int
@@ -358,7 +345,6 @@ func TestCmdGlobal(t *testing.T) {
 	}{
 		{
 			input:          []byte(",g/hello/d"),
-			expectError:    false,
 			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedBuffer: []string{"world1", "world2", "world3"},
 			expectedStart:  3,
@@ -366,7 +352,6 @@ func TestCmdGlobal(t *testing.T) {
 		},
 		{
 			input:          []byte(",g/hello/"),
-			expectError:    false,
 			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedBuffer: []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedStart:  5,
@@ -374,7 +359,6 @@ func TestCmdGlobal(t *testing.T) {
 		},
 		{
 			input:          []byte(",v/hello/"),
-			expectError:    false,
 			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedBuffer: []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedStart:  6,
@@ -382,7 +366,6 @@ func TestCmdGlobal(t *testing.T) {
 		},
 		{
 			input:          []byte(",v/hello/d"),
-			expectError:    false,
 			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedBuffer: []string{"hello1", "hello2", "hello3"},
 			expectedStart:  3,
@@ -390,7 +373,6 @@ func TestCmdGlobal(t *testing.T) {
 		},
 		{
 			input:          []byte("2,$g|hello|d"),
-			expectError:    false,
 			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedBuffer: []string{"hello1", "world1", "world2", "world3"},
 			expectedStart:  4,
@@ -398,7 +380,6 @@ func TestCmdGlobal(t *testing.T) {
 		},
 		{
 			input:          []byte("2,$v|hello|d"),
-			expectError:    false,
 			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedBuffer: []string{"hello1", "hello2", "hello3"},
 			expectedStart:  3,
@@ -406,7 +387,6 @@ func TestCmdGlobal(t *testing.T) {
 		},
 		{
 			input:          []byte(",g/hello/s/hello/world/g"),
-			expectError:    false,
 			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedBuffer: []string{"world1", "world1", "world2", "world2", "world3", "world3"},
 			expectedStart:  5,
@@ -414,7 +394,6 @@ func TestCmdGlobal(t *testing.T) {
 		},
 		{
 			input:          []byte("3g|hello|"),
-			expectError:    false,
 			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedBuffer: []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedStart:  3,
@@ -422,7 +401,6 @@ func TestCmdGlobal(t *testing.T) {
 		},
 		{
 			input:          []byte("g|world|d"),
-			expectError:    false,
 			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
 			expectedBuffer: []string{"hello1", "hello2", "hello3"},
 			expectedStart:  3,
@@ -431,17 +409,13 @@ func TestCmdGlobal(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
-			var err error
 			ted.setupTestFile(test.buffer)
 			ted.ReadInput(bytes.NewBuffer(test.input))
-			if err = ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err = ted.DoCommand(); err != nil && !test.expectError {
+			if err := ted.DoCommand(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
-			}
-			if test.expectError && err == nil {
-				t.Fatalf("expected error, got none")
 			}
 			if len(test.expectedBuffer) != len(ted.Lines) {
 				t.Fatalf("expected the total line count to be %d, got %d",
@@ -469,7 +443,6 @@ func TestCmdInsertLines(t *testing.T) {
 	tests := []struct {
 		input          []byte
 		data           string
-		expectError    bool
 		buffer         []string
 		expectedBuffer []string
 		expectedStart  int
@@ -478,7 +451,6 @@ func TestCmdInsertLines(t *testing.T) {
 		{
 			input:          []byte("1,3i"),
 			data:           "inserted\ntext\n.",
-			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world", "inserted", "text", "!"},
 			expectedStart:  4,
@@ -487,7 +459,6 @@ func TestCmdInsertLines(t *testing.T) {
 		{
 			input:          []byte("1i"),
 			data:           "inserted\n.",
-			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"inserted", "hello", "world", "!"},
 			expectedStart:  1,
@@ -496,7 +467,6 @@ func TestCmdInsertLines(t *testing.T) {
 		{
 			input:          []byte("i"),
 			data:           "inserted\n.",
-			expectError:    false,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world", "inserted", "!"},
 			expectedStart:  3,
@@ -508,10 +478,10 @@ func TestCmdInsertLines(t *testing.T) {
 			ted.in = strings.NewReader(test.data)
 			ted.setupTestFile(test.buffer)
 			ted.ReadInput(bytes.NewBuffer(test.input))
-			if err := ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err := ted.DoCommand(); err != nil && !test.expectError {
+			if err := ted.DoCommand(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
 			if len(test.expectedBuffer) != len(ted.Lines) {
@@ -539,25 +509,25 @@ func TestCmdJoinLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
-		expectError    bool
+		expectedError  error
 		buffer         []string
 		expectedBuffer []string
 	}{
 		{
 			input:          []byte("1,2j"),
-			expectError:    false,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"helloworld", "!"},
 		},
 		{
 			input:          []byte("2j"),
-			expectError:    false,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world!"},
 		},
 		{
 			input:          []byte("j"),
-			expectError:    true,
+			expectedError:  ErrInvalidAddress,
 			buffer:         []string{"hello", "world", "!"},
 			expectedBuffer: []string{"hello", "world", "!"},
 		},
@@ -566,11 +536,11 @@ func TestCmdJoinLines(t *testing.T) {
 		t.Run(string(test.input), func(t *testing.T) {
 			ted.setupTestFile(test.buffer)
 			ted.ReadInput(bytes.NewBuffer(test.input))
-			if err := ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err := ted.DoCommand(); err != nil && !test.expectError {
-				t.Fatalf("expected no error, got %s", err)
+			if err := ted.DoCommand(); err != test.expectedError {
+				t.Fatalf("expected error '%s', got %s", test.expectedError, err)
 			}
 			if len(test.expectedBuffer) != len(ted.Lines) {
 				t.Fatalf("expected the total line count to be %d, got %d",
@@ -592,36 +562,29 @@ func TestCmdMark(t *testing.T) {
 	ted.setupTestFile(dummyFile)
 	tests := []struct {
 		input         [][]byte
-		expectError   []bool
 		expectedStart []int
 		expectedEnd   []int
 	}{
 		{
 			input:         [][]byte{[]byte("3ka"), []byte("5"), []byte("'a")},
-			expectError:   []bool{false, false, false},
 			expectedStart: []int{3, 5, 3},
 			expectedEnd:   []int{3, 5, 3},
 		},
 		{
 			input:         [][]byte{[]byte("2,5ka"), []byte("'a")},
-			expectError:   []bool{false, false},
 			expectedStart: []int{2, 5},
 			expectedEnd:   []int{5, 5},
 		},
 	}
 	for _, test := range tests {
 		t.Run(string(bytes.Join(test.input, []byte(" "))), func(t *testing.T) {
-			var err error
 			for n, cmd := range test.input {
 				ted.ReadInput(bytes.NewBuffer(cmd))
-				if err = ted.DoRange(); err != nil && !test.expectError[n] {
+				if err := ted.DoRange(); err != nil {
 					t.Fatalf("expected no error, got %s", err)
 				}
-				if err = ted.DoCommand(); err != nil && !test.expectError[n] {
+				if err := ted.DoCommand(); err != nil {
 					t.Fatalf("expected no error, got %s", err)
-				}
-				if test.expectError[n] && err == nil {
-					t.Fatalf("expected error, got none")
 				}
 				if test.expectedStart[n] != ted.Start {
 					t.Fatalf("expected start to be %d, got %d", test.expectedStart[n], ted.Start)
@@ -639,7 +602,7 @@ func TestCmdMoveLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
-		expectError    bool
+		expectedError  error
 		buffer         []string
 		expectedBuffer []string
 		expectedStart  int
@@ -647,7 +610,7 @@ func TestCmdMoveLines(t *testing.T) {
 	}{
 		{
 			input:          []byte("1,2m4"),
-			expectError:    false,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"!", "this", "hello", "world", "is", "a", "longer", "file"},
 			expectedStart:  4,
@@ -655,7 +618,7 @@ func TestCmdMoveLines(t *testing.T) {
 		},
 		{
 			input:          []byte("4m6"),
-			expectError:    false,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "is", "a", "this", "longer", "file"},
 			expectedStart:  6,
@@ -663,51 +626,30 @@ func TestCmdMoveLines(t *testing.T) {
 		},
 		{
 			input:          []byte("m2"),
-			expectError:    false,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "file", "world", "!", "this", "is", "a", "longer"},
 			expectedStart:  2,
 			expectedEnd:    2,
 		},
-		// {
-		// 	input:          []byte("4m"),
-		// 	expectError:    true,
-		// 	buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-		// 	expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-		// 	expectedStart:  8,
-		// 	expectedEnd:    8,
-		// },
 		{
 			input:          []byte("m"),
-			expectError:    true,
+			expectedError:  ErrInvalidCmdSuffix,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedStart:  8,
 			expectedEnd:    8,
 		},
-		// {
-		// 	input:          []byte("1,2m1"),
-		// 	expectError:    true,
-		// 	buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-		// 	expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-		// 	expectedStart:  8,
-		// 	expectedEnd:    8,
-		// },
 	}
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
-			var err error
 			ted.setupTestFile(test.buffer)
 			ted.ReadInput(bytes.NewBuffer(test.input))
-
-			if err = ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err = ted.DoCommand(); err != nil && !test.expectError {
-				t.Fatalf("expected no error, got %s", err)
-			}
-			if test.expectError && err == nil {
-				t.Fatalf("expected error, got none")
+			if err := ted.DoCommand(); err != test.expectedError {
+				t.Fatalf("expected error '%s', got %s", test.expectedError, err)
 			}
 			if len(test.expectedBuffer) != len(ted.Lines) {
 				t.Fatalf("expected the total line count to be %d, got %d",
@@ -741,7 +683,6 @@ func TestCmdPrintTotalLines(t *testing.T) {
 	tests := []struct {
 		input          []byte
 		buffer         []string
-		expectError    bool
 		expectedOutput string
 		expectedStart  int
 		expectedEnd    int
@@ -749,7 +690,6 @@ func TestCmdPrintTotalLines(t *testing.T) {
 		{
 			input:          []byte("1,5="),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "7\n",
 			expectedStart:  1,
 			expectedEnd:    5,
@@ -757,7 +697,6 @@ func TestCmdPrintTotalLines(t *testing.T) {
 		{
 			input:          []byte("3="),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "7\n",
 			expectedStart:  3,
 			expectedEnd:    3,
@@ -765,7 +704,6 @@ func TestCmdPrintTotalLines(t *testing.T) {
 		{
 			input:          []byte("="),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "7\n",
 			expectedStart:  7,
 			expectedEnd:    7,
@@ -773,19 +711,15 @@ func TestCmdPrintTotalLines(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
-			var err error
 			var b bytes.Buffer
 			ted.out = &b
 			ted.ReadInput(bytes.NewBuffer(test.input))
 			ted.setupTestFile(test.buffer)
-			if err = ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err = ted.DoCommand(); err != nil && !test.expectError {
+			if err := ted.DoCommand(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
-			}
-			if test.expectError && err == nil {
-				t.Fatalf("expected error, got none")
 			}
 			if b.String() != test.expectedOutput {
 				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
@@ -806,7 +740,6 @@ func TestCmdPrintLines(t *testing.T) {
 	tests := []struct {
 		input          []byte
 		buffer         []string
-		expectError    bool
 		expectedOutput string
 		expectedStart  int
 		expectedEnd    int
@@ -814,7 +747,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte("1p"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "A\n",
 			expectedStart:  1,
 			expectedEnd:    1,
@@ -822,7 +754,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte("1n"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "1\tA\n",
 			expectedStart:  1,
 			expectedEnd:    1,
@@ -830,7 +761,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte("1l"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "A$\n",
 			expectedStart:  1,
 			expectedEnd:    1,
@@ -838,7 +768,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte("1,5p"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "A\nB\nC\nD\nE\n",
 			expectedStart:  1,
 			expectedEnd:    5,
@@ -846,7 +775,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte("1,5n"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "1\tA\n2\tB\n3\tC\n4\tD\n5\tE\n",
 			expectedStart:  1,
 			expectedEnd:    5,
@@ -854,7 +782,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte("1,5l"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "A$\nB$\nC$\nD$\nE$\n",
 			expectedStart:  1,
 			expectedEnd:    5,
@@ -862,7 +789,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte(",p"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "A\nB\nC\nD\nE\nF\nG\n",
 			expectedStart:  1,
 			expectedEnd:    7,
@@ -870,7 +796,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte(",n"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "1\tA\n2\tB\n3\tC\n4\tD\n5\tE\n6\tF\n7\tG\n",
 			expectedStart:  1,
 			expectedEnd:    7,
@@ -878,7 +803,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte(",l"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "A$\nB$\nC$\nD$\nE$\nF$\nG$\n",
 			expectedStart:  1,
 			expectedEnd:    7,
@@ -886,7 +810,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte("p"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "G\n",
 			expectedStart:  7,
 			expectedEnd:    7,
@@ -894,7 +817,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte("n"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "7\tG\n",
 			expectedStart:  7,
 			expectedEnd:    7,
@@ -902,7 +824,6 @@ func TestCmdPrintLines(t *testing.T) {
 		{
 			input:          []byte("l"),
 			buffer:         []string{"A", "B", "C", "D", "E", "F", "G"},
-			expectError:    false,
 			expectedOutput: "G$\n",
 			expectedStart:  7,
 			expectedEnd:    7,
@@ -910,19 +831,15 @@ func TestCmdPrintLines(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
-			var err error
 			var b bytes.Buffer
 			ted.out = &b
 			ted.ReadInput(bytes.NewBuffer(test.input))
 			ted.setupTestFile(test.buffer)
-			if err = ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err = ted.DoCommand(); err != nil && !test.expectError {
+			if err := ted.DoCommand(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
-			}
-			if test.expectError && err == nil {
-				t.Fatalf("expected error, got none")
 			}
 			if b.String() != test.expectedOutput {
 				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
@@ -948,7 +865,6 @@ func TestCmdScroll(t *testing.T) {
 	ted.setupTestFile(dummyFile)
 	tests := []struct {
 		input          []byte
-		expectError    bool
 		expectedStart  int
 		expectedEnd    int
 		expectedOutput string
@@ -980,18 +896,14 @@ func TestCmdScroll(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
-			var err error
 			var b bytes.Buffer
 			ted.ReadInput(bytes.NewBuffer(test.input))
 			ted.out = &b
-			if err = ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err = ted.DoCommand(); err != nil && !test.expectError {
+			if err := ted.DoCommand(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
-			}
-			if test.expectError && err == nil {
-				t.Fatalf("expected error, got none")
 			}
 			if test.expectedStart != ted.Start {
 				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
@@ -1011,7 +923,6 @@ func TestCmdSubstitute(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
-		expectError    bool
 		buffer         []string
 		expectedBuffer []string
 		expectedStart  int
@@ -1062,17 +973,13 @@ func TestCmdSubstitute(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
-			var err error
 			ted.setupTestFile(test.buffer)
 			ted.ReadInput(bytes.NewBuffer(test.input))
-			if err = ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err = ted.DoCommand(); err != nil && !test.expectError {
+			if err := ted.DoCommand(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
-			}
-			if test.expectError && err == nil {
-				t.Fatalf("expected error, got none")
 			}
 			if len(test.expectedBuffer) != len(ted.Lines) {
 				t.Fatalf("expected the total line count to be %d, got %d",
@@ -1109,7 +1016,7 @@ func TestCmdTransferLines(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	tests := []struct {
 		input          []byte
-		expectError    bool
+		expectedError  error
 		buffer         []string
 		expectedBuffer []string
 		expectedStart  int
@@ -1117,7 +1024,7 @@ func TestCmdTransferLines(t *testing.T) {
 	}{
 		{
 			input:          []byte("1,2t3"),
-			expectError:    false,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "hello", "world", "this", "is", "a", "longer", "file"},
 			expectedStart:  5,
@@ -1125,7 +1032,7 @@ func TestCmdTransferLines(t *testing.T) {
 		},
 		{
 			input:          []byte("3t4"),
-			expectError:    false,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "this", "!", "is", "a", "longer", "file"},
 			expectedStart:  5,
@@ -1133,7 +1040,7 @@ func TestCmdTransferLines(t *testing.T) {
 		},
 		{
 			input:          []byte("t5"),
-			expectError:    false,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "this", "is", "file", "a", "longer", "file"},
 			expectedStart:  6,
@@ -1141,7 +1048,7 @@ func TestCmdTransferLines(t *testing.T) {
 		},
 		{
 			input:          []byte("t"),
-			expectError:    true,
+			expectedError:  ErrDestinationExpected,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedStart:  8,
@@ -1149,7 +1056,7 @@ func TestCmdTransferLines(t *testing.T) {
 		},
 		{
 			input:          []byte("1t"),
-			expectError:    true,
+			expectedError:  ErrDestinationExpected,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedStart:  1,
@@ -1157,7 +1064,7 @@ func TestCmdTransferLines(t *testing.T) {
 		},
 		{
 			input:          []byte("1t0"),
-			expectError:    false,
+			expectedError:  nil,
 			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedBuffer: []string{"hello", "hello", "world", "!", "this", "is", "a", "longer", "file"},
 			expectedStart:  1,
@@ -1166,17 +1073,13 @@ func TestCmdTransferLines(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
-			var err error
 			ted.setupTestFile(test.buffer)
 			ted.ReadInput(bytes.NewBuffer(test.input))
-			if err = ted.DoRange(); err != nil && !test.expectError {
+			if err := ted.DoRange(); err != nil {
 				t.Fatalf("expected no error, got %s", err)
 			}
-			if err = ted.DoCommand(); err != nil && !test.expectError {
-				t.Fatalf("expected no error, got %s", err)
-			}
-			if test.expectError && err == nil {
-				t.Fatalf("expected error, got none")
+			if err := ted.DoCommand(); err != test.expectedError {
+				t.Fatalf("expected error '%s', got %s", test.expectedError, err)
 			}
 			if len(test.expectedBuffer) != len(ted.Lines) {
 				t.Fatalf("expected the total line count to be %d, got %d",
