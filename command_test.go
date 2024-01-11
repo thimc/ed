@@ -892,7 +892,66 @@ func TestCmdRead(t *testing.T) {
 // TestCmdScroll tests the scroll (z) command.
 func TestCmdScroll(t *testing.T) {
 	log.SetOutput(io.Discard)
-	// TODO: TestCmdScroll
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	ted.setupTestFile(dummyFile)
+	tests := []struct {
+		input          []byte
+		expectError    bool
+		expectedStart  int
+		expectedEnd    int
+		expectedOutput string
+	}{
+		{
+			input:          []byte("1,4z5"),
+			expectedStart:  9,
+			expectedEnd:    9,
+			expectedOutput: "D\nE\nF\nG\nH\nI\n",
+		},
+		{
+			input:          []byte("z"),
+			expectedStart:  15,
+			expectedEnd:    15,
+			expectedOutput: "J\nK\nL\nM\nN\nO\n",
+		},
+		{
+			input:          []byte("5z3"),
+			expectedStart:  8,
+			expectedEnd:    8,
+			expectedOutput: "E\nF\nG\nH\n",
+		},
+		{
+			input:          []byte("z20"),
+			expectedStart:  26,
+			expectedEnd:    26,
+			expectedOutput: "I\nJ\nK\nL\nM\nN\nO\nP\nQ\nR\nS\nT\nU\nV\nW\nX\nY\nZ\n",
+		},
+	}
+	for _, test := range tests {
+		t.Run(string(test.input), func(t *testing.T) {
+			var err error
+			var b bytes.Buffer
+			ted.ReadInput(bytes.NewBuffer(test.input))
+			ted.out = &b
+			if err = ted.DoRange(); err != nil && !test.expectError {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if err = ted.DoCommand(); err != nil && !test.expectError {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if test.expectError && err == nil {
+				t.Fatalf("expected error, got none")
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
+			}
+			if b.String() != test.expectedOutput {
+				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
+			}
+		})
+	}
 }
 
 // TestCmdSubstitute tests the substitute (s) command.
