@@ -973,6 +973,71 @@ func TestCmdScroll(t *testing.T) {
 	}
 }
 
+// TestCmdSearch tests the search commands / and ?.
+func TestCmdSearch(t *testing.T) {
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	ted.setupTestFile(dummyFile)
+	tests := []struct {
+		input          []byte
+		expectedStart  int
+		expectedEnd    int
+		expectedOutput string
+	}{
+		{
+			input:          []byte("/A/"),
+			expectedStart:  1,
+			expectedEnd:    1,
+			expectedOutput: "A\n",
+		},
+		{
+			input:          []byte("/A"),
+			expectedStart:  1,
+			expectedEnd:    1,
+			expectedOutput: "A\n",
+		},
+		{
+			input:          []byte("/A/,/F/p"),
+			expectedStart:  1,
+			expectedEnd:    6,
+			expectedOutput: "A\nB\nC\nD\nE\nF\n",
+		},
+		{
+			input:          []byte("?D?p"),
+			expectedStart:  4,
+			expectedEnd:    4,
+			expectedOutput: "D\n",
+		},
+		{
+			input:          []byte("?C?,.p"),
+			expectedStart:  3,
+			expectedEnd:    4,
+			expectedOutput: "C\nD\n",
+		},
+	}
+	for _, test := range tests {
+		t.Run(string(test.input), func(t *testing.T) {
+			var b bytes.Buffer
+			ted.ReadInput(bytes.NewBuffer(test.input))
+			ted.out = &b
+			if err := ted.DoRange(); err != nil {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if err := ted.DoCommand(); err != nil {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if test.expectedStart != ted.Start {
+				t.Fatalf("expected start to be %d, got %d", test.expectedStart, ted.Start)
+			}
+			if test.expectedEnd != ted.End {
+				t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
+			}
+			if b.String() != test.expectedOutput {
+				t.Fatalf("expected output '%s', got '%s'", test.expectedOutput, b.String())
+			}
+		})
+	}
+}
+
 // TestCmdSubstitute tests the substitute (s) command.
 func TestCmdSubstitute(t *testing.T) {
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)

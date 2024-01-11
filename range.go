@@ -43,29 +43,30 @@ func (ed *Editor) Range() (int, error) {
 		case ed.token() == '/':
 			var mod rune = ed.token()
 			ed.nextToken()
-			var search string = ed.scanString()
-			if search == string(mod) || search == "" {
+			var search string = ed.scanStringUntil(mod)
+			if ed.token() == mod {
+				ed.nextToken()
+			}
+			if search == "" {
 				if ed.search == "" {
 					return 0, ErrNoPrevPattern
 				}
 				search = ed.search
-			} else if search[len(search)-1] == byte(mod) {
-				search = search[:len(search)-1]
 			}
 			ed.search = search
-			var s int = ed.End - 1
+			var s int = 0 // ed.End - 1
 			var e = len(ed.Lines)
 			if mod == '?' {
+				s = ed.End - 1
 				e = 0
 			}
-			ed.dump()
 			for i := s; i != e; {
 				if i < 0 || i > len(ed.Lines) {
 					return 0, ErrNoMatch
 				}
 				match, err := regexp.MatchString(search, ed.Lines[i])
 				if err != nil {
-					return 0, err
+					return 0, ErrNoMatch
 				}
 				if match {
 					ed.addr = i + 1
@@ -94,7 +95,6 @@ func (ed *Editor) Range() (int, error) {
 				return 0, ErrInvalidAddress
 			}
 			ed.addr = maddr
-			ed.dump()
 		case ed.token() == '+':
 			fallthrough
 		case ed.token() == '-':
