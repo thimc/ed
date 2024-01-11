@@ -203,7 +203,7 @@ func (ed *Editor) WriteFile(start, end int, path string) error {
 // at index 'start' until 'end.' If successful, the current buffer
 // will no longer be considered dirty.
 func (ed *Editor) AppendFile(start, end int, path string) error {
-	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, os.ModeAppend)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
