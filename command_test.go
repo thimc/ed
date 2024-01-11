@@ -268,8 +268,8 @@ func TestCmdDeleteLines(t *testing.T) {
 
 // TestCmdEdit tests the edit (e) command.
 func TestCmdEdit(t *testing.T) {
-	var path string = "dummy"
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	var path string = "dummy"
 	ted.createDummyFile(path)
 	defer ted.removeDummyFile(path)
 	tests := []struct {
@@ -318,6 +318,32 @@ func TestCmdEdit(t *testing.T) {
 // TestCmdFile tests the file name (f) command.
 func TestCmdFile(t *testing.T) {
 	// TODO: TestCmdFile
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	var b bytes.Buffer
+	ted.ReadInput(strings.NewReader("f"))
+	var err error
+	var expectedError error = ErrNoFileName
+	ted.DoRange()
+	if err = ted.DoCommand(); err != expectedError {
+		t.Fatalf("expected error '%s', got none", expectedError)
+	}
+	var path string = "dummy"
+	ted.createDummyFile(path)
+	defer ted.removeDummyFile(path)
+	ted.ReadInput(strings.NewReader("e " + path))
+	ted.DoRange()
+	if err = ted.DoCommand(); err != nil {
+		t.Fatalf("expected no error, got '%s'", err)
+	}
+	ted.err = &b
+	ted.ReadInput(strings.NewReader("f"))
+	ted.DoRange()
+	if err = ted.DoCommand(); err != nil {
+		t.Fatalf("expected no error, got '%s'", err)
+	}
+	if b.String() != path+"\n" {
+		t.Fatalf("expected output to be '%s', got '%s'", path, b.String())
+	}
 }
 
 // TestCmdGlobal tests the global (g) and inverse global (v) command.
