@@ -317,7 +317,6 @@ func TestCmdEdit(t *testing.T) {
 
 // TestCmdFile tests the file name (f) command.
 func TestCmdFile(t *testing.T) {
-	// TODO: TestCmdFile
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	var b bytes.Buffer
 	ted.ReadInput(strings.NewReader("f"))
