@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -60,6 +59,7 @@ type Editor struct {
 	s         scanner.Scanner
 	tok       rune
 
+	Scroll         int
 	Search         string
 	Error          error
 	Prompt         rune
@@ -88,7 +88,7 @@ func NewEditor(stdin io.Reader, stdout io.Writer, stderr io.Writer) *Editor {
 		out:    stdout,
 		err:    stderr,
 	}
-	ed.setupSignals()
+	// ed.setupSignals()
 	return &ed
 }
 
@@ -134,11 +134,9 @@ func (ed *Editor) setupSignals() {
 		switch sig {
 		case syscall.SIGHUP:
 			if ed.Dirty {
-				log.Printf("Received SIGHUP and file is dirty\n")
 				ed.WriteFile(1, len(ed.Lines), defaultHangupFile)
 			}
 		case syscall.SIGINT:
-			log.Printf("Received SIGINT\n")
 			fmt.Fprintf(os.Stderr, "%s\n", ErrDefault)
 			ed.sigint = true
 		}
@@ -170,9 +168,9 @@ func (ed *Editor) ReadFile(path string) (int64, []string, error) {
 		return siz, lines, err
 	}
 	ed.Path = path
-	ed.Dot = len(ed.Lines)
-	ed.Start = ed.Dot
-	ed.End = ed.Dot
+	ed.End = len(ed.Lines)
+	ed.Start = ed.End
+	ed.Dot = ed.End
 	ed.addr = -1
 	return siz, lines, nil
 }
@@ -187,7 +185,6 @@ func (ed *Editor) WriteFile(start, end int, path string) error {
 	}
 	defer file.Close()
 	var siz int
-	log.Printf("Write range %d to %d to %s\n", start, end, path)
 	for i := start - 1; i < end; i++ {
 		var line string = ed.Lines[i]
 		_, err := file.WriteString(line + "\n")
@@ -210,7 +207,6 @@ func (ed *Editor) AppendFile(start, end int, path string) error {
 		return err
 	}
 	defer file.Close()
-	log.Printf("Append range %d to %d to %s\n", start, end, path)
 	var siz int
 	for i := start - 1; i < end; i++ {
 		var line string = ed.Lines[i]
@@ -239,12 +235,10 @@ func (ed *Editor) Shell(command string) ([]string, error) {
 		parsed += string(ctok)
 		if ctok != '\\' && cs.Peek() == '%' {
 			ctok = cs.Scan()
-			log.Printf("Replacing %% with '%s'\n", ed.Path)
 			parsed += ed.Path
 		}
 		ctok = cs.Scan()
 	}
-	log.Printf("Shell (parsed): '%s'\n", parsed)
 	cmd := exec.Command("/bin/sh", "-c", parsed)
 	stdout, err := cmd.StdoutPipe()
 	defer stdout.Close()
@@ -313,7 +307,6 @@ func (ed *Editor) scanString() string {
 		}
 		ed.nextToken()
 	}
-	log.Printf("scanString(): '%s'\n", str)
 	return str
 }
 
@@ -329,7 +322,6 @@ func (ed *Editor) scanStringUntil(delim rune) string {
 		}
 		ed.nextToken()
 	}
-	log.Printf("scanStringUntil(): '%s'\n", str)
 	return str
 }
 
@@ -338,7 +330,6 @@ func (ed *Editor) scanStringUntil(delim rune) string {
 func (ed *Editor) scanNumber() (int, error) {
 	var n, start, end int
 	var err error
-
 	start = ed.s.Position.Offset
 	for unicode.IsDigit(ed.token()) {
 		ed.nextToken()
@@ -346,9 +337,7 @@ func (ed *Editor) scanNumber() (int, error) {
 	end = ed.s.Position.Offset
 
 	num := string(ed.input[start:end])
-	log.Printf("Convert num: '%s'\n", num)
 	n, err = strconv.Atoi(num)
-	log.Printf("ConsumeNumber(): '%d' err=%t\n", n, err != nil)
 	return n, err
 }
 
@@ -374,9 +363,9 @@ func (ed *Editor) nextToken() {
 // the start, end and dot index values are printed to standard output.
 // The internal address value and the address counter is also printed.
 func (ed *Editor) dump() {
-	log.Printf("start=%d | end=%d | dot=%d | addr=%d | addrcount=%d | ",
+	fmt.Printf("start=%d | end=%d | dot=%d | addr=%d | addrcount=%d | ",
 		ed.Start, ed.End, ed.Dot, ed.addr, ed.addrcount)
-	log.Printf("offset=%d | eof=%t | token='%c' | ",
+	fmt.Printf("offset=%d | eof=%t | token='%c' | ",
 		ed.s.Pos().Offset, ed.token() == scanner.EOF, ed.token())
-	log.Printf("buffer_len=%d\n", len(ed.Lines))
+	fmt.Printf("buffer_len=%d\n", len(ed.Lines))
 }

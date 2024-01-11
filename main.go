@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
-	"log"
 	"os"
 )
 
@@ -13,7 +11,6 @@ var (
 	promptFlag   = flag.Bool("p", false, "toggles the prompt")
 	suppressFlag = flag.Bool("s", false, "suppress diagnostics")
 )
-
 var ed *Editor
 
 func printError(err error) bool {
@@ -32,12 +29,10 @@ func main() {
 	flag.Parse()
 	ed = NewEditor(os.Stdin, os.Stdout, os.Stderr)
 	if !*debugFlag {
-		log.SetOutput(io.Discard)
 	}
 	if *promptFlag {
 		ed.Prompt = defaultPrompt
 	}
-
 	var args []string = flag.Args()
 	if len(args) == 1 {
 		var siz int64
@@ -46,10 +41,8 @@ func main() {
 		if !printError(err) {
 			fmt.Fprintf(ed.err, "%d\n", siz)
 			ed.Path = args[0]
-			log.Printf("Open file %s\n", args[0])
 		}
 	}
-
 	for {
 		if ed.Prompt != 0 {
 			fmt.Fprintf(os.Stderr, "%c", ed.Prompt)

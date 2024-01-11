@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"io"
-	"log"
 	"testing"
 )
 
@@ -15,7 +14,6 @@ var dummyFile = []string{
 // TestRange() runs tests on the range parser and verifies the start, end and
 // dot position. It also compares the output.
 func TestRange(t *testing.T) {
-	log.SetOutput(io.Discard)
 	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
 	ted.setupTestFile(dummyFile)
 	tests := []struct {
