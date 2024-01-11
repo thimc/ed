@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"io"
+	"os"
 	"testing"
 )
 
@@ -134,4 +135,27 @@ func (ed *Editor) setupTestFile(buf []string) {
 	ed.Start = ed.Dot
 	ed.End = ed.Dot
 	ed.addr = -1
+}
+
+func (ed *Editor) removeDummyFile(fname string) {
+	if _, err := os.Stat(fname); err == nil {
+		if err := os.Remove(fname); err != nil {
+			panic(err)
+		}
+	}
+}
+
+func (ed *Editor) createDummyFile(fname string) {
+	ed.removeDummyFile(fname)
+	file, err := os.Create(fname)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	for _, ln := range dummyFile {
+		_, err := file.WriteString(ln+"\n")
+		if err != nil {
+			panic(err)
+		}
+	}
 }
