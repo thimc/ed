@@ -10,10 +10,9 @@ import (
 	"unicode"
 )
 
+// DoCommand will run ed commands on one line or a range specified by
+// the Start and End position and set them accordingly.
 func (ed *Editor) DoCommand() error {
-	// FIXME: We might need to check the bounds in some of these commands
-	// adding a ed.checkRanges() here will block the user from inserting
-	// text if the start and end values are invalid.
 	switch ed.token() {
 	case 'a':
 		for {
@@ -464,9 +463,6 @@ func (ed *Editor) DoCommand() error {
 		dst, err := ed.scanNumber()
 		if err != nil {
 			return ErrDestinationExpected
-		}
-		if err := ed.checkRange(); err != nil {
-			return err
 		}
 		if ed.Start-1 < 0 {
 			return ErrInvalidAddress

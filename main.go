@@ -16,7 +16,7 @@ func (ed *Editor) printError(err error) bool {
 	if err != nil {
 		ed.Error = err
 		if ed.printErrors {
-			fmt.Fprintf(ed.err, "%s\n", err)
+			fmt.Fprintf(ed.err, "%s\n", ed.Error)
 		} else {
 			fmt.Fprintf(ed.err, "%s\n", ErrDefault)
 		}
@@ -29,8 +29,6 @@ func main() {
 	var ed *Editor
 	flag.Parse()
 	ed = NewEditor(os.Stdin, os.Stdout, os.Stderr)
-	if !*debugFlag {
-	}
 	if *promptFlag {
 		ed.Prompt = defaultPrompt
 	}

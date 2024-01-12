@@ -81,12 +81,13 @@ func NewEditor(stdin io.Reader, stdout io.Writer, stderr io.Writer) *Editor {
 		out:   stdout,
 		err:   stderr,
 	}
-	// ed.setupSignals()
+	ed.setupSignals()
 	return &ed
 }
 
-// ReadInput reads from the io.Reader until it encounters a newline
-// symbol (\n') or EOF. After that it sets up the scanner and tokenizer.
+// ReadInput reads user input from the io.Reader until it encounters
+// a newline symbol (\n') or EOF. After that it sets up the scanner
+// and tokenizer.
 func (ed *Editor) ReadInput(r io.Reader) error {
 	ed.input = []byte{}
 	buf := make([]byte, 1)
@@ -191,7 +192,9 @@ func (ed *Editor) WriteFile(start, end int, path string) error {
 		siz += len(line) + 1
 	}
 	ed.Dirty = false
-	fmt.Fprintf(ed.err, "%d\n", siz)
+	if !ed.Silent {
+		fmt.Fprintf(ed.err, "%d\n", siz)
+	}
 	return err
 }
 
@@ -214,7 +217,9 @@ func (ed *Editor) AppendFile(start, end int, path string) error {
 		siz += len(line) + 1
 	}
 	ed.Dirty = false
-	fmt.Fprintf(ed.err, "%d\n", siz)
+	if !ed.Silent {
+		fmt.Fprintf(ed.err, "%d\n", siz)
+	}
 	return err
 }
 
@@ -288,13 +293,18 @@ func (ed *Editor) ReadInsert() (string, error) {
 	return buf.String(), nil
 }
 
-// checkRange checks if the Start and End values are valid numbers
-// and within the size of the current buffer.
+// checkRange will verify that the Start and End positions are valid
+// numbers and within the size of the buffer if the current command
+// is expected to use these variables.
 func (ed *Editor) checkRange() error {
-	if len(ed.Lines) > 0 {
-		if ed.Start > ed.End || ed.Start < 1 || ed.End < 1 || ed.End > len(ed.Lines) {
-			return ErrInvalidAddress
+	skipCmds := []rune{'q', 'Q', 'e', 'E', 'f', 'i', 'a', 'H', 'h', 'P', 'r', '!', '='}
+	for _, cmd := range skipCmds {
+		if ed.token() == cmd {
+			return nil
 		}
+	}
+	if ed.Start > ed.End || ed.Start < 1 || ed.End < 1 || ed.End > len(ed.Lines) {
+		return ErrInvalidAddress
 	}
 	return nil
 }
@@ -329,7 +339,7 @@ func (ed *Editor) scanStringUntil(delim rune) string {
 }
 
 // scanNumber will advance the tokenizer while the current token is a
-// digit and convert the parsed data to an integer
+// digit and convert the parsed data to an integer.
 func (ed *Editor) scanNumber() (int, error) {
 	var n, start, end int
 	var err error
@@ -361,8 +371,8 @@ func (ed *Editor) nextToken() {
 	ed.tok = ed.s.Scan()
 }
 
-// debug function used to print the "stack frame" of the application,
-// the start, end and dot index values are printed to standard output.
+// dump is a helper function that is used to print the state of the program.
+// The start, end and dot index values are printed to standard output.
 // The internal address value and the address counter is also printed.
 func (ed *Editor) dump() {
 	fmt.Printf("start=%d | end=%d | dot=%d | addr=%d | addrcount=%d | ",

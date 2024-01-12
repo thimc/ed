@@ -6,7 +6,10 @@ import (
 	"unicode"
 )
 
-func (ed *Editor) Range() (int, error) {
+// nextAddress attempts to extract the next valid address. It navigates
+// through the user input, identifying and returning the next address
+// based on predefined criteria, for more info see the ed(1) man page.
+func (ed *Editor) nextAddress() (int, error) {
 	ed.addr = ed.Dot
 	var mod rune
 	var first bool
@@ -138,7 +141,7 @@ func (ed *Editor) Range() (int, error) {
 			if first {
 				ed.nextToken()
 				var err error
-				n, err := ed.Range()
+				n, err := ed.nextAddress()
 				if err != nil {
 					return 0, err
 				}
@@ -166,6 +169,8 @@ func (ed *Editor) Range() (int, error) {
 	}
 }
 
+// DoRange parses user input to extract the specified line or range
+// on which the user intends to execute commands.
 func (ed *Editor) DoRange() error {
 	var n int
 	var err error
@@ -176,7 +181,7 @@ func (ed *Editor) DoRange() error {
 		goto end
 	}
 	for {
-		n, err = ed.Range()
+		n, err = ed.nextAddress()
 		if n < 0 {
 			break
 		}
