@@ -12,8 +12,13 @@ import (
 
 // DoCommand will run ed commands on one line or a range specified by
 // the Start and End position and set them accordingly.
-func (ed *Editor) DoCommand() error {
-	switch ed.token() {
+func (ed *Editor) DoCommand() (err error) {
+	defer func() {
+		if err != nil {
+			ed.Error = err
+		}
+	}()
+	switch ed.tok {
 	case 'a':
 		for {
 			line, err := ed.ReadInsert()
@@ -26,15 +31,14 @@ func (ed *Editor) DoCommand() error {
 			}
 			if len(ed.Lines) == ed.End {
 				ed.Lines = append(ed.Lines, line)
-				ed.Start++
-				ed.End++
-				continue
+			} else {
+				ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
 			}
-			ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
 			ed.End++
+			ed.Start = ed.End
+			ed.Dot = ed.End
 			ed.Dirty = true
 		}
-		ed.Start = ed.End
 		return nil
 	case 'c':
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
@@ -51,30 +55,29 @@ func (ed *Editor) DoCommand() error {
 			ed.Lines = append(ed.Lines[:ed.End+1], ed.Lines[ed.End:]...)
 			ed.Lines[ed.End] = line
 			ed.End++
+			ed.Start = ed.End
+			ed.Dot = ed.End
 			ed.Dirty = true
 		}
-		ed.Start = ed.End
-		ed.Dot = ed.End
 		return nil
 	case 'd':
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		if ed.Start > len(ed.Lines) {
 			ed.Start = len(ed.Lines)
 		}
+		ed.End = ed.Start
 		ed.Dot = ed.Start
-		ed.End = ed.Dot
-		ed.Start = ed.Dot
 		ed.Dirty = true
 		return nil
 	case 'E':
 		fallthrough
 	case 'e':
-		var uc bool = (ed.token() == 'E')
-		ed.nextToken()
-		ed.nextToken()
+		var uc bool = (ed.tok == 'E')
+		ed.tok = ed.s.Scan()
+		ed.tok = ed.s.Scan()
 		var cmd bool
-		if ed.token() == '!' {
-			ed.nextToken()
+		if ed.tok == '!' {
+			ed.tok = ed.s.Scan()
 			cmd = true
 		}
 		ed.skipWhitespace()
@@ -96,7 +99,6 @@ func (ed *Editor) DoCommand() error {
 			ed.Dot = len(ed.Lines)
 			ed.Start = ed.Dot
 			ed.End = ed.Dot
-			ed.addr = -1
 			fmt.Fprintf(ed.err, "%d\n", siz)
 		case false:
 			if fname == "" && ed.Path == "" {
@@ -118,15 +120,15 @@ func (ed *Editor) DoCommand() error {
 		ed.Dirty = true
 		return nil
 	case 'f':
-		ed.nextToken()
-		if ed.token() == scanner.EOF {
+		ed.tok = ed.s.Scan()
+		if ed.tok == scanner.EOF {
 			if ed.Path == "" {
 				return ErrNoFileName
 			}
 			fmt.Fprintf(ed.err, "%s\n", ed.Path)
 			return nil
 		}
-		ed.nextToken()
+		ed.tok = ed.s.Scan()
 		var fname string = ed.scanString()
 		if fname == "" {
 			return ErrNoFileName
@@ -141,23 +143,23 @@ func (ed *Editor) DoCommand() error {
 	case 'v':
 		fallthrough
 	case 'g':
-		var i bool = (ed.token() == 'G' || ed.token() == 'V')
-		var v bool = (ed.token() == 'v' || ed.token() == 'V')
+		var i bool = (ed.tok == 'G' || ed.tok == 'V')
+		var v bool = (ed.tok == 'v' || ed.tok == 'V')
 		if ed.s.Pos().Offset == 1 {
 			ed.Start = 1
 			ed.End = len(ed.Lines)
 		}
-		ed.nextToken()
-		var delim rune = ed.token()
-		ed.nextToken()
+		ed.tok = ed.s.Scan()
+		var delim rune = ed.tok
+		ed.tok = ed.s.Scan()
 		if delim == ' ' || delim == scanner.EOF {
 			return ErrInvalidPatternDelim
 		}
 		var s int = ed.Start
 		var e int = ed.End
 		var search string = ed.scanStringUntil(delim)
-		if ed.token() == delim {
-			ed.nextToken()
+		if ed.tok == delim {
+			ed.tok = ed.s.Scan()
 		}
 		var cmd string = ed.scanString()
 		if cmd != "" {
@@ -214,14 +216,10 @@ func (ed *Editor) DoCommand() error {
 			}
 			if ed.End > len(ed.Lines) {
 				ed.Lines = append(ed.Lines, line)
-				ed.End++
-				continue
+			} else {
+				ed.Lines = append(ed.Lines[:ed.End], ed.Lines[ed.End-1:]...)
+				ed.Lines[ed.End-1] = line
 			}
-			if ed.End < 0 {
-				return ErrInvalidAddress
-			}
-			ed.Lines = append(ed.Lines[:ed.End], ed.Lines[ed.End-1:]...)
-			ed.Lines[ed.End-1] = line
 			ed.Dirty = true
 			ed.End++
 		}
@@ -238,15 +236,14 @@ func (ed *Editor) DoCommand() error {
 		var joined string = strings.Join(ed.Lines[ed.Start-1:ed.End], "")
 		var result []string = append(append([]string{}, ed.Lines[:ed.Start-1]...), joined)
 		ed.Lines = append(result, ed.Lines[ed.End:]...)
+		ed.End = ed.Start
 		ed.Dot = ed.Start
-		ed.End = ed.Dot
-		ed.addr = ed.Dot
 		ed.Dirty = true
 		return nil
 	case 'k':
-		ed.nextToken()
-		var r rune = ed.token()
-		ed.nextToken()
+		ed.tok = ed.s.Scan()
+		var r rune = ed.tok
+		ed.tok = ed.s.Scan()
 		if r == scanner.EOF || !unicode.IsLower(r) {
 			return ErrInvalidMark
 		}
@@ -258,26 +255,28 @@ func (ed *Editor) DoCommand() error {
 		return nil
 	case 'm':
 		var err error
-		var dst int
-		ed.nextToken()
-		dst, err = ed.scanNumber()
+		var n, dst int
+		ed.tok = ed.s.Scan()
+		n, err = ed.scanNumber()
 		if err != nil {
 			ed.Start = ed.Dot
 			ed.End = ed.Dot
 			return ErrInvalidCmdSuffix
 		}
-		if dst < 0 || dst > len(ed.Lines) {
+		if n < 0 || n > len(ed.Lines) {
 			return ErrDestinationExpected
 		}
-		var lines []string = make([]string, ed.End-ed.Start+1)
-		if dst-len(lines) <= 0 || ed.Start-1 < 0 {
-			return ErrDestinationExpected
-		}
+		lines := make([]string, ed.End-ed.Start+1)
 		copy(lines, ed.Lines[ed.Start-1:ed.End])
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
+		dst = n
+		if n-len(lines) < 0 {
+			dst = len(lines) + n
+		}
 		ed.Lines = append(ed.Lines[:dst-len(lines)], append(lines, ed.Lines[dst-len(lines):]...)...)
 		ed.End = dst
-		ed.Start = ed.End
+		ed.Start = dst
+		ed.Dot = dst
 		ed.Dirty = true
 		return nil
 	case 'l':
@@ -289,7 +288,7 @@ func (ed *Editor) DoCommand() error {
 			if i < 0 {
 				continue
 			}
-			switch ed.token() {
+			switch ed.tok {
 			case 'l':
 				var q string = strconv.QuoteToASCII(ed.Lines[i])
 				fmt.Fprintf(ed.out, "%s$\n", q[1:len(q)-1])
@@ -301,23 +300,22 @@ func (ed *Editor) DoCommand() error {
 		}
 		return nil
 	case 'P':
-		if ed.Prompt == 0 {
+		ed.showPrompt = !ed.showPrompt
+		if ed.Prompt == "" {
 			ed.Prompt = defaultPrompt
-		} else {
-			ed.Prompt = 0
 		}
 		return nil
 	case 'q':
 		fallthrough
 	case 'Q':
-		if ed.token() == 'q' && ed.Dirty {
+		if ed.tok == 'q' && ed.Dirty {
 			ed.Dirty = false
 			return ErrFileModified
 		}
 		os.Exit(0)
 		return nil
 	case 'r':
-		ed.nextToken()
+		ed.tok = ed.s.Scan()
 		ed.skipWhitespace()
 		var fname string = ed.scanString()
 		if fname == "" {
@@ -362,13 +360,13 @@ func (ed *Editor) DoCommand() error {
 		ed.Start = ed.End
 		return nil
 	case 's':
-		ed.nextToken()
+		ed.tok = ed.s.Scan()
 		var search, repl string
 		var mod rune
 		var re *regexp.Regexp
 		var err error
-		ed.nextToken()
-		if ed.token() == scanner.EOF {
+		ed.tok = ed.s.Scan()
+		if ed.tok == scanner.EOF {
 			if ed.search == "" && ed.replacestr == "" {
 				return ErrNoPreviousSub
 			}
@@ -376,16 +374,16 @@ func (ed *Editor) DoCommand() error {
 			repl = ed.replacestr
 		}
 		search = ed.scanStringUntil('/')
-		ed.nextToken()
-		if ed.token() != scanner.EOF {
+		ed.tok = ed.s.Scan()
+		if ed.tok != scanner.EOF {
 			repl = ed.scanStringUntil('/')
-			ed.nextToken()
+			ed.tok = ed.s.Scan()
 		}
 		if repl == "%" && ed.replacestr != "" {
 			repl = ed.replacestr
 		}
-		if ed.token() != scanner.EOF {
-			mod = ed.token()
+		if ed.tok != scanner.EOF {
+			mod = ed.tok
 		}
 		re, err = regexp.Compile(search)
 		if err != nil {
@@ -456,8 +454,8 @@ func (ed *Editor) DoCommand() error {
 		}
 		return nil
 	case 't':
-		ed.nextToken()
-		if ed.token() == scanner.EOF {
+		ed.tok = ed.s.Scan()
+		if ed.tok == scanner.EOF {
 			return ErrDestinationExpected
 		}
 		dst, err := ed.scanNumber()
@@ -475,23 +473,30 @@ func (ed *Editor) DoCommand() error {
 		ed.Dirty = true
 		return nil
 	case 'u':
-		return fmt.Errorf("TODO: u (undo) not implemented")
+		// if ed.s.Pos().Offset != 1 {
+		// 	return ErrUnexpectedAddress
+		// }
+		// if ed.s.Peek() != scanner.EOF {
+		// 	return ErrInvalidCmdSuffix
+		// }
+		// return ed.Undo()
+		return nil
 	case 'W':
 		fallthrough
 	case 'w':
 		var quit bool
-		var r rune = ed.token()
+		var r rune = ed.tok
 		var full bool = (ed.s.Pos().Offset == 1)
-		ed.nextToken()
+		ed.tok = ed.s.Scan()
 		if r == 'w' {
-			if ed.token() == 'q' {
-				ed.nextToken()
+			if ed.tok == 'q' {
+				ed.tok = ed.s.Scan()
 				quit = true
 			}
 		} else {
 		}
-		if ed.token() == ' ' {
-			ed.nextToken()
+		if ed.tok == ' ' {
+			ed.tok = ed.s.Scan()
 		}
 		var fname string = ed.scanString()
 		if fname == "" && ed.Path == "" {
@@ -517,7 +522,7 @@ func (ed *Editor) DoCommand() error {
 		}
 		return err
 	case 'z':
-		ed.nextToken()
+		ed.tok = ed.s.Scan()
 		var err error
 		var scroll int
 		scroll, err = ed.scanNumber()
@@ -546,10 +551,10 @@ func (ed *Editor) DoCommand() error {
 		fmt.Fprintf(ed.out, "%d\n", len(ed.Lines))
 		return nil
 	case '!':
-		ed.nextToken()
+		ed.tok = ed.s.Scan()
 		ed.skipWhitespace()
 		var buf string
-		if ed.token() == scanner.EOF {
+		if ed.tok == scanner.EOF {
 			if ed.shellCmd != "" {
 				buf = ed.shellCmd
 			} else {
@@ -570,11 +575,22 @@ func (ed *Editor) DoCommand() error {
 	case 0:
 		fallthrough
 	case scanner.EOF:
-		if ed.End-1 < 0 || ed.End-1 > len(ed.Lines) {
-			return ErrInvalidAddress
+		if ed.s.Pos().Offset == 0 {
+			ed.Dot++
+			if ed.Dot >= len(ed.Lines) {
+				ed.Dot = len(ed.Lines)
+				err = ErrInvalidAddress
+			}
+			ed.Start = ed.Dot
+			ed.End = ed.Dot
 		}
-		fmt.Fprintf(ed.out, "%s\n", ed.Lines[ed.End-1])
-		return nil
+		if err == nil {
+			if ed.End-1 < 0 {
+				return ErrInvalidAddress
+			}
+			fmt.Fprintf(ed.out, "%s\n", ed.Lines[ed.End-1])
+		}
+		return err
 	default:
 		return ErrUnknownCmd
 	}

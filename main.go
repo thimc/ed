@@ -8,7 +8,7 @@ import (
 
 var (
 	debugFlag    = flag.Bool("d", false, "toggles debug information")
-	promptFlag   = flag.Bool("p", false, "toggles the prompt")
+	promptFlag   = flag.String("p", "", "prompt")
 	suppressFlag = flag.Bool("s", false, "suppress diagnostics")
 )
 
@@ -29,8 +29,9 @@ func main() {
 	var ed *Editor
 	flag.Parse()
 	ed = NewEditor(os.Stdin, os.Stdout, os.Stderr)
-	if *promptFlag {
-		ed.Prompt = defaultPrompt
+	ed.Prompt = *promptFlag
+	if *promptFlag != "" {
+		ed.showPrompt = true
 	}
 	ed.Silent = *suppressFlag
 	var args []string = flag.Args()

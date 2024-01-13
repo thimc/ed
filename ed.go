@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultPrompt     = '*'
+	defaultPrompt     = "*"
 	defaultHangupFile = "ed.hup"
 )
 
@@ -38,6 +38,7 @@ var (
 	ErrNoMatch             = errors.New("no match")
 	ErrNoPrevPattern       = errors.New("no previous pattern")
 	ErrNoPreviousSub       = errors.New("no previous substitution")
+	ErrUnexpectedAddress   = errors.New("unexpected address")
 	ErrUnexpectedCmdSuffix = errors.New("unexpected command suffix")
 	ErrUnknownCmd          = errors.New("unknown command")
 	ErrZero                = errors.New("0")
@@ -60,7 +61,8 @@ type Editor struct {
 	scroll      int             // previous scroll value
 	search      string          // previous search criteria for /, ? or s
 	replacestr  string          // previous s replacement
-	Prompt      rune            // user prompt
+	showPrompt  bool            // toggle for displaying the prompt
+	Prompt      string          // user prompt
 	shellCmd    string          // previous command for !
 	globalCmd   string          // previous command used by g, G, v and V
 	printErrors bool            // toggle errors
@@ -91,8 +93,8 @@ func NewEditor(stdin io.Reader, stdout io.Writer, stderr io.Writer) *Editor {
 func (ed *Editor) ReadInput(r io.Reader) error {
 	ed.input = []byte{}
 	buf := make([]byte, 1)
-	if ed.Prompt != 0 {
-		fmt.Fprintf(ed.err, "%c", ed.Prompt)
+	if ed.showPrompt {
+		fmt.Fprintf(ed.err, "%s", ed.Prompt)
 	}
 	for {
 		n, err := r.Read(buf)
@@ -120,7 +122,7 @@ func (ed *Editor) setupScanner() {
 	ed.s.Init(bytes.NewReader(ed.input))
 	ed.s.Mode = scanner.ScanStrings
 	ed.s.Whitespace ^= scanner.GoWhitespace
-	ed.nextToken()
+	ed.tok = ed.s.Scan()
 }
 
 // setupSignals sets up signal handlers for SIGHUP and SIGINT.
@@ -297,9 +299,9 @@ func (ed *Editor) ReadInsert() (string, error) {
 // numbers and within the size of the buffer if the current command
 // is expected to use these variables.
 func (ed *Editor) checkRange() error {
-	skipCmds := []rune{'q', 'Q', 'e', 'E', 'f', 'i', 'a', 'H', 'h', 'P', 'r', '!', '='}
+	skipCmds := []rune{'a', 'e', 'E', 'f', 'h', 'H', 'i', 'P', 'q', 'Q', 'r', 'u', '!', '='}
 	for _, cmd := range skipCmds {
-		if ed.token() == cmd {
+		if ed.tok == cmd {
 			return nil
 		}
 	}
@@ -314,11 +316,11 @@ func (ed *Editor) checkRange() error {
 // Newlines (\n) and carriage returns (\r) are ignored.
 func (ed *Editor) scanString() string {
 	var str string
-	for ed.token() != scanner.EOF {
-		if ed.token() != '\n' && ed.token() != '\r' {
-			str += string(ed.token())
+	for ed.tok != scanner.EOF {
+		if ed.tok != '\n' && ed.tok != '\r' {
+			str += string(ed.tok)
 		}
-		ed.nextToken()
+		ed.tok = ed.s.Scan()
 	}
 	return str
 }
@@ -329,11 +331,11 @@ func (ed *Editor) scanString() string {
 // (\r) are ignored.
 func (ed *Editor) scanStringUntil(delim rune) string {
 	var str string
-	for ed.token() != scanner.EOF && ed.token() != delim {
-		if ed.token() != '\n' && ed.token() != '\r' {
-			str += string(ed.token())
+	for ed.tok != scanner.EOF && ed.tok != delim {
+		if ed.tok != '\n' && ed.tok != '\r' {
+			str += string(ed.tok)
 		}
-		ed.nextToken()
+		ed.tok = ed.s.Scan()
 	}
 	return str
 }
@@ -344,8 +346,8 @@ func (ed *Editor) scanNumber() (int, error) {
 	var n, start, end int
 	var err error
 	start = ed.s.Position.Offset
-	for unicode.IsDigit(ed.token()) {
-		ed.nextToken()
+	for unicode.IsDigit(ed.tok) {
+		ed.tok = ed.s.Scan()
 	}
 	end = ed.s.Position.Offset
 	num := string(ed.input[start:end])
@@ -356,19 +358,9 @@ func (ed *Editor) scanNumber() (int, error) {
 // skipWhitespace advances the tokenizer until the current token is
 // not a white space, tab indent, or a newline.
 func (ed *Editor) skipWhitespace() {
-	for ed.token() == ' ' || ed.token() == '\t' || ed.token() == '\n' {
-		ed.nextToken()
+	for ed.tok == ' ' || ed.tok == '\t' || ed.tok == '\n' {
+		ed.tok = ed.s.Scan()
 	}
-}
-
-// token returns the current token.
-func (ed *Editor) token() rune {
-	return ed.tok
-}
-
-// nextToken will advance the tokenizer and set the current token
-func (ed *Editor) nextToken() {
-	ed.tok = ed.s.Scan()
 }
 
 // dump is a helper function that is used to print the state of the program.
@@ -378,6 +370,6 @@ func (ed *Editor) dump() {
 	fmt.Printf("start=%d | end=%d | dot=%d | addr=%d | addrcount=%d | ",
 		ed.Start, ed.End, ed.Dot, ed.addr, ed.addrCount)
 	fmt.Printf("offset=%d | eof=%t | token='%c' | ",
-		ed.s.Pos().Offset, ed.token() == scanner.EOF, ed.token())
+		ed.s.Pos().Offset, ed.tok == scanner.EOF, ed.tok)
 	fmt.Printf("buffer_len=%d\n", len(ed.Lines))
 }

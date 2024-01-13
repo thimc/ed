@@ -15,7 +15,7 @@ func (ed *Editor) nextAddress() (int, error) {
 	var first bool
 	for first = true; ; first = false {
 		for {
-			switch ed.token() {
+			switch ed.tok {
 			case ' ':
 				fallthrough
 			case '\t':
@@ -23,32 +23,32 @@ func (ed *Editor) nextAddress() (int, error) {
 			case '\n':
 				fallthrough
 			case '\r':
-				ed.nextToken()
+				ed.tok = ed.s.Scan()
 				continue
 			}
 			break
 		}
 		switch {
-		case ed.token() == '.':
+		case ed.tok == '.':
 			fallthrough
-		case ed.token() == '$':
+		case ed.tok == '$':
 			if !first {
 				return 0, ErrInvalidAddress
 			}
-			if ed.token() == '.' {
+			if ed.tok == '.' {
 				ed.addr = ed.Dot
 			} else {
 				ed.addr = len(ed.Lines)
 			}
-			ed.nextToken()
-		case ed.token() == '?':
+			ed.tok = ed.s.Scan()
+		case ed.tok == '?':
 			fallthrough
-		case ed.token() == '/':
-			var mod rune = ed.token()
-			ed.nextToken()
+		case ed.tok == '/':
+			var mod rune = ed.tok
+			ed.tok = ed.s.Scan()
 			var search string = ed.scanStringUntil(mod)
-			if ed.token() == mod {
-				ed.nextToken()
+			if ed.tok == mod {
+				ed.tok = ed.s.Scan()
 			}
 			if search == "" {
 				if ed.search == "" {
@@ -82,10 +82,10 @@ func (ed *Editor) nextAddress() (int, error) {
 				}
 			}
 			return 0, ErrNoMatch
-		case ed.token() == '\'':
-			ed.nextToken()
-			var r rune = ed.token()
-			ed.nextToken()
+		case ed.tok == '\'':
+			ed.tok = ed.s.Scan()
+			var r rune = ed.tok
+			ed.tok = ed.s.Scan()
 			if r == scanner.EOF || !unicode.IsLower(r) {
 				return 0, ErrInvalidMark
 			}
@@ -98,14 +98,14 @@ func (ed *Editor) nextAddress() (int, error) {
 				return 0, ErrInvalidAddress
 			}
 			ed.addr = maddr
-		case ed.token() == '+':
+		case ed.tok == '+':
 			fallthrough
-		case ed.token() == '-':
+		case ed.tok == '-':
 			fallthrough
-		case ed.token() == '^':
-			mod = ed.token()
-			ed.nextToken()
-			if !unicode.IsDigit(ed.token()) {
+		case ed.tok == '^':
+			mod = ed.tok
+			ed.tok = ed.s.Scan()
+			if !unicode.IsDigit(ed.tok) {
 				switch mod {
 				case '^', '-':
 					ed.addr--
@@ -114,11 +114,11 @@ func (ed *Editor) nextAddress() (int, error) {
 				}
 			}
 			fallthrough
-		case unicode.IsDigit(ed.token()):
+		case unicode.IsDigit(ed.tok):
 			if !first {
 				return 0, ErrInvalidAddress
 			}
-			if unicode.IsDigit(ed.token()) {
+			if unicode.IsDigit(ed.tok) {
 				n, err := ed.scanNumber()
 				if err != nil {
 					return 0, ErrInvalidNumber
@@ -132,14 +132,14 @@ func (ed *Editor) nextAddress() (int, error) {
 					ed.addr = n
 				}
 			}
-		case ed.token() == ';':
+		case ed.tok == ';':
 			fallthrough
-		case ed.token() == '%':
+		case ed.tok == '%':
 			fallthrough
-		case ed.token() == ',':
-			var r rune = ed.token()
+		case ed.tok == ',':
+			var r rune = ed.tok
 			if first {
-				ed.nextToken()
+				ed.tok = ed.s.Scan()
 				var err error
 				n, err := ed.nextAddress()
 				if err != nil {
@@ -177,7 +177,7 @@ func (ed *Editor) DoRange() error {
 	ed.addrCount = 0
 	ed.Start = ed.Dot
 	ed.End = ed.Dot
-	if ed.token() == scanner.EOF {
+	if ed.tok == scanner.EOF {
 		goto end
 	}
 	for {
@@ -192,12 +192,12 @@ func (ed *Editor) DoRange() error {
 		ed.addrCount++
 		ed.Start = ed.End
 		ed.End = ed.addr
-		if ed.token() != ',' && ed.token() != ';' {
+		if ed.tok != ',' && ed.tok != ';' {
 			break
 		} else if ed.s.Peek() == ';' {
 			ed.Dot = ed.addr
 		}
-		if ed.token() == scanner.EOF {
+		if ed.tok == scanner.EOF {
 			break
 		}
 	}
@@ -206,11 +206,6 @@ end:
 		ed.Start = ed.End
 	}
 	ed.Dot = ed.End
-	if ed.token() == scanner.EOF && ed.s.Pos().Offset == 0 {
-		ed.Dot++
-		ed.Start = ed.Dot
-		ed.End = ed.Dot
-	}
 	if err := ed.checkRange(); err != nil {
 		return err
 	}
