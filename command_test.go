@@ -22,26 +22,34 @@ func TestCmdAppendLines(t *testing.T) {
 		{
 			input:          []byte("1,3a"),
 			data:           "A\nB\nC\n.\n",
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "world", "!", "A", "B", "C"},
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"A", "B", "C", "A", "B", "C"},
 			expectedStart:  6,
 			expectedEnd:    6,
 		},
 		{
 			input:          []byte("2a"),
 			data:           "A\nB\nC\n.\n",
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "world", "A", "B", "C", "!"},
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"A", "B", "A", "B", "C", "C"},
 			expectedStart:  5,
 			expectedEnd:    5,
 		},
 		{
 			input:          []byte("a"),
-			data:           "appended\n.\n",
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "world", "!", "appended"},
+			data:           "D\n.\n",
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"A", "B", "C", "D"},
 			expectedStart:  4,
 			expectedEnd:    4,
+		},
+		{
+			input:          []byte("2a"),
+			data:           "C\n.",
+			buffer:         []string{"A", "B"},
+			expectedBuffer: []string{"A", "B", "C"},
+			expectedStart:  3,
+			expectedEnd:    3,
 		},
 	}
 	for _, test := range tests {
@@ -134,25 +142,25 @@ func TestCmdChangeLines(t *testing.T) {
 	}{
 		{
 			input:          []byte("1,3c"),
-			data:           "changed\ntext\n.\n",
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"changed", "text"},
+			data:           "D\nE\n.\n",
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"D", "E"},
 			expectedStart:  2,
 			expectedEnd:    2,
 		},
 		{
 			input:          []byte("1c"),
-			data:           "changed\n.\n",
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"changed", "world", "!"},
+			data:           "D\n.\n",
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"D", "B", "C"},
 			expectedStart:  1,
 			expectedEnd:    1,
 		},
 		{
 			input:          []byte("c"),
-			data:           "changed\n.\n",
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "world", "changed"},
+			data:           "D\n.\n",
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"A", "B", "D"},
 			expectedStart:  3,
 			expectedEnd:    3,
 		},
@@ -202,24 +210,24 @@ func TestCmdDeleteLines(t *testing.T) {
 		{
 			input:          []byte("1,2d"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"!"},
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"C"},
 			expectedStart:  1,
 			expectedEnd:    1,
 		},
 		{
 			input:          []byte("2d"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "!"},
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"A", "C"},
 			expectedStart:  2,
 			expectedEnd:    2,
 		},
 		{
 			input:          []byte("d"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "world"},
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"A", "B"},
 			expectedStart:  2,
 			expectedEnd:    2,
 		},
@@ -344,65 +352,65 @@ func TestCmdGlobal(t *testing.T) {
 		expectedEnd    int
 	}{
 		{
-			input:          []byte(",g/hello/d"),
-			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
-			expectedBuffer: []string{"world1", "world2", "world3"},
+			input:          []byte(",g/A/d"),
+			buffer:         []string{"A1", "B1", "A2", "B2", "A3", "B3"},
+			expectedBuffer: []string{"B1", "B2", "B3"},
 			expectedStart:  3,
 			expectedEnd:    3,
 		},
 		{
-			input:          []byte(",g/hello/"),
-			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
-			expectedBuffer: []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
+			input:          []byte(",g/A/"),
+			buffer:         []string{"A1", "B1", "A2", "B2", "A3", "B3"},
+			expectedBuffer: []string{"A1", "B1", "A2", "B2", "A3", "B3"},
 			expectedStart:  5,
 			expectedEnd:    5,
 		},
 		{
-			input:          []byte(",v/hello/"),
-			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
-			expectedBuffer: []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
+			input:          []byte(",v/A/"),
+			buffer:         []string{"A1", "B1", "A2", "B2", "A3", "B3"},
+			expectedBuffer: []string{"A1", "B1", "A2", "B2", "A3", "B3"},
 			expectedStart:  6,
 			expectedEnd:    6,
 		},
 		{
-			input:          []byte(",v/hello/d"),
-			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
-			expectedBuffer: []string{"hello1", "hello2", "hello3"},
+			input:          []byte(",v/A/d"),
+			buffer:         []string{"A1", "B1", "A2", "B2", "A3", "B3"},
+			expectedBuffer: []string{"A1", "A2", "A3"},
 			expectedStart:  3,
 			expectedEnd:    3,
 		},
 		{
-			input:          []byte("2,$g|hello|d"),
-			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
-			expectedBuffer: []string{"hello1", "world1", "world2", "world3"},
+			input:          []byte("2,$g|A|d"),
+			buffer:         []string{"A1", "B1", "A2", "B2", "A3", "B3"},
+			expectedBuffer: []string{"A1", "B1", "B2", "B3"},
 			expectedStart:  4,
 			expectedEnd:    4,
 		},
 		{
-			input:          []byte("2,$v|hello|d"),
-			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
-			expectedBuffer: []string{"hello1", "hello2", "hello3"},
+			input:          []byte("2,$v|A|d"),
+			buffer:         []string{"A1", "B1", "A2", "B2", "A3", "B3"},
+			expectedBuffer: []string{"A1", "A2", "A3"},
 			expectedStart:  3,
 			expectedEnd:    3,
 		},
 		{
-			input:          []byte(",g/hello/s/hello/world/g"),
-			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
-			expectedBuffer: []string{"world1", "world1", "world2", "world2", "world3", "world3"},
+			input:          []byte(",g/A/s/A/B/g"),
+			buffer:         []string{"A1", "B1", "A2", "B2", "A3", "B3"},
+			expectedBuffer: []string{"B1", "B1", "B2", "B2", "B3", "B3"},
 			expectedStart:  5,
 			expectedEnd:    5,
 		},
 		{
-			input:          []byte("3g|hello|"),
-			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
-			expectedBuffer: []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
+			input:          []byte("3g|A|"),
+			buffer:         []string{"A1", "B1", "A2", "B2", "A3", "B3"},
+			expectedBuffer: []string{"A1", "B1", "A2", "B2", "A3", "B3"},
 			expectedStart:  3,
 			expectedEnd:    3,
 		},
 		{
-			input:          []byte("g|world|d"),
-			buffer:         []string{"hello1", "world1", "hello2", "world2", "hello3", "world3"},
-			expectedBuffer: []string{"hello1", "hello2", "hello3"},
+			input:          []byte("g|B|d"),
+			buffer:         []string{"A1", "B1", "A2", "B2", "A3", "B3"},
+			expectedBuffer: []string{"A1", "A2", "A3"},
 			expectedStart:  3,
 			expectedEnd:    3,
 		},
@@ -450,27 +458,35 @@ func TestCmdInsertLines(t *testing.T) {
 	}{
 		{
 			input:          []byte("1,3i"),
-			data:           "inserted\ntext\n.",
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "world", "inserted", "text", "!"},
+			data:           "D\nE\n.",
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"A", "B", "D", "E", "C"},
 			expectedStart:  4,
 			expectedEnd:    4,
 		},
 		{
 			input:          []byte("1i"),
-			data:           "inserted\n.",
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"inserted", "hello", "world", "!"},
+			data:           "D\n.",
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"D", "A", "B", "C"},
 			expectedStart:  1,
 			expectedEnd:    1,
 		},
 		{
 			input:          []byte("i"),
-			data:           "inserted\n.",
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "world", "inserted", "!"},
+			data:           "D\n.",
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"A", "B", "D", "C"},
 			expectedStart:  3,
 			expectedEnd:    3,
+		},
+		{
+			input:          []byte("2i"),
+			data:           "B\n.",
+			buffer:         []string{"A", "C"},
+			expectedBuffer: []string{"A", "B", "C"},
+			expectedStart:  2,
+			expectedEnd:    2,
 		},
 	}
 	for _, test := range tests {
@@ -516,20 +532,26 @@ func TestCmdJoinLines(t *testing.T) {
 		{
 			input:          []byte("1,2j"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"helloworld", "!"},
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"AB", "C"},
+		},
+		{
+			input:          []byte(",j"),
+			expectedError:  nil,
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"ABC"},
 		},
 		{
 			input:          []byte("2j"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "world!"},
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"A", "BC"},
 		},
 		{
 			input:          []byte("j"),
 			expectedError:  ErrInvalidAddress,
-			buffer:         []string{"hello", "world", "!"},
-			expectedBuffer: []string{"hello", "world", "!"},
+			buffer:         []string{"A", "B", "C"},
+			expectedBuffer: []string{"A", "B", "C"},
 		},
 	}
 	for _, test := range tests {
@@ -614,34 +636,42 @@ func TestCmdMoveLines(t *testing.T) {
 		expectedEnd    int
 	}{
 		{
-			input:          []byte("1,2m4"),
+			input:          []byte("4,6m1"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"!", "this", "hello", "world", "is", "a", "longer", "file"},
+			buffer:         []string{"A", "B", "C", "D", "E", "F"},
+			expectedBuffer: []string{"A", "D", "E", "F", "B", "C"},
 			expectedStart:  4,
 			expectedEnd:    4,
 		},
 		{
+			input:          []byte("4,6m0"),
+			expectedError:  nil,
+			buffer:         []string{"A", "B", "C", "D", "E", "F"},
+			expectedBuffer: []string{"D", "E", "F", "A", "B", "C"},
+			expectedStart:  3,
+			expectedEnd:    3,
+		},
+		{
 			input:          []byte("4m6"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"hello", "world", "!", "is", "a", "this", "longer", "file"},
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G", "H"},
+			expectedBuffer: []string{"A", "B", "C", "E", "F", "D", "G", "H"},
 			expectedStart:  6,
 			expectedEnd:    6,
 		},
 		{
 			input:          []byte("m2"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"hello", "file", "world", "!", "this", "is", "a", "longer"},
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G", "H"},
+			expectedBuffer: []string{"A", "H", "B", "C", "D", "E", "F", "G"},
 			expectedStart:  2,
 			expectedEnd:    2,
 		},
 		{
 			input:          []byte("m"),
 			expectedError:  ErrInvalidCmdSuffix,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G", "H"},
+			expectedBuffer: []string{"A", "B", "C", "D", "E", "F", "G", "H"},
 			expectedStart:  8,
 			expectedEnd:    8,
 		},
@@ -678,7 +708,27 @@ func TestCmdMoveLines(t *testing.T) {
 
 // TestCmdPrintLastError tests the print last error (h) command.
 func TestCmdPrintLastError(t *testing.T) {
-	// TODO: TestCmdPrintLastError
+	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	ted.ReadInput(bytes.NewBufferString("f"))
+	var expectedError error = ErrNoFileName
+	if err := ted.DoRange(); err != nil {
+		t.Fatalf("expected no error, got '%s'", err)
+	}
+	if err := ted.DoCommand(); err != expectedError {
+		t.Fatalf("expected error '%s', got '%s'", expectedError, err)
+	}
+	ted.ReadInput(bytes.NewBufferString("h"))
+	var b bytes.Buffer
+	ted.err = &b
+	if err := ted.DoRange(); err != nil {
+		t.Fatalf("expected no error, got '%s'", err)
+	}
+	if err := ted.DoCommand(); err != nil {
+		t.Fatalf("expected no error, got '%s'", err)
+	}
+	if b.String() != expectedError.Error()+"\n" {
+		t.Fatalf("expected the output to be '%s', got '%s'", expectedError, b.String())
+	}
 }
 
 // TestCmdPrintTotalLines tests the total lines (=) command.
@@ -1049,46 +1099,46 @@ func TestCmdSubstitute(t *testing.T) {
 		expectedEnd    int
 	}{
 		{
-			input:          []byte(",s/hello/world"),
-			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
-			expectedBuffer: []string{"world world", "world hello world", "world hello hello world"},
+			input:          []byte(",s/A/B"),
+			buffer:         []string{"A B", "A A B", "A A A B"},
+			expectedBuffer: []string{"B B", "B A B", "B A A B"},
 			expectedStart:  3,
 			expectedEnd:    3,
 		},
 		{
-			input:          []byte(",s/hello/world/g"),
-			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
-			expectedBuffer: []string{"world world", "world world world", "world world world world"},
+			input:          []byte(",s/A/B/g"),
+			buffer:         []string{"A B", "A A B", "A A A B"},
+			expectedBuffer: []string{"B B", "B B B", "B B B B"},
 			expectedStart:  3,
 			expectedEnd:    3,
 		},
 		{
-			input:          []byte(",s/hello/world/2"),
-			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
-			expectedBuffer: []string{"hello world", "hello world world", "hello world hello world"},
+			input:          []byte(",s/A/B/2"),
+			buffer:         []string{"A B", "A A B", "A A A B"},
+			expectedBuffer: []string{"A B", "A B B", "A B A B"},
 			expectedStart:  3,
 			expectedEnd:    3,
 		},
 		{
-			input:          []byte("3s/hello/world/"),
-			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
-			expectedBuffer: []string{"hello world", "hello hello world", "world hello hello world"},
+			input:          []byte("3s/A/B/"),
+			buffer:         []string{"A B", "A A B", "A A A B"},
+			expectedBuffer: []string{"A B", "A A B", "B A A B"},
 			expectedStart:  3,
 			expectedEnd:    3,
 		},
 		{
-			input:          []byte("3s/hello/world/g"),
-			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
-			expectedBuffer: []string{"hello world", "hello hello world", "world world world world"},
+			input:          []byte("3s/A/B/g"),
+			buffer:         []string{"A B", "A A B", "A A A B"},
+			expectedBuffer: []string{"A B", "A A B", "B B B B"},
 			expectedStart:  3,
 			expectedEnd:    3,
 		},
 		{
-			input:          []byte("3s/hello/world/1"),
-			buffer:         []string{"hello world", "hello hello world", "hello hello hello world"},
-			expectedBuffer: []string{"hello world", "hello hello world", "world hello hello world"},
-			expectedStart:  3,
-			expectedEnd:    3,
+			input:         []byte("3s/A/B/1"),
+			buffer:        []string{"A B", "A A B", "A A A B"},
+			expectedBuffer: []string{"A B", "A A B", "B A A B"},
+			expectedStart: 3,
+			expectedEnd:   3,
 		},
 	}
 	for _, test := range tests {
@@ -1145,48 +1195,48 @@ func TestCmdTransferLines(t *testing.T) {
 		{
 			input:          []byte("1,2t3"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"hello", "world", "!", "hello", "world", "this", "is", "a", "longer", "file"},
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G", "H"},
+			expectedBuffer: []string{"A", "B", "C", "A", "B", "D", "E", "F", "G", "H"},
 			expectedStart:  5,
 			expectedEnd:    5,
 		},
 		{
 			input:          []byte("3t4"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"hello", "world", "!", "this", "!", "is", "a", "longer", "file"},
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G", "H"},
+			expectedBuffer: []string{"A", "B", "C", "D", "C", "E", "F", "G", "H"},
 			expectedStart:  5,
 			expectedEnd:    5,
 		},
 		{
 			input:          []byte("t5"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"hello", "world", "!", "this", "is", "file", "a", "longer", "file"},
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G", "H"},
+			expectedBuffer: []string{"A", "B", "C", "D", "E", "H", "F", "G", "H"},
 			expectedStart:  6,
 			expectedEnd:    6,
 		},
 		{
 			input:          []byte("t"),
 			expectedError:  ErrDestinationExpected,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G", "H"},
+			expectedBuffer: []string{"A", "B", "C", "D", "E", "F", "G", "H"},
 			expectedStart:  8,
 			expectedEnd:    8,
 		},
 		{
 			input:          []byte("1t"),
 			expectedError:  ErrDestinationExpected,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G", "H"},
+			expectedBuffer: []string{"A", "B", "C", "D", "E", "F", "G", "H"},
 			expectedStart:  1,
 			expectedEnd:    1,
 		},
 		{
 			input:          []byte("1t0"),
 			expectedError:  nil,
-			buffer:         []string{"hello", "world", "!", "this", "is", "a", "longer", "file"},
-			expectedBuffer: []string{"hello", "hello", "world", "!", "this", "is", "a", "longer", "file"},
+			buffer:         []string{"A", "B", "C", "D", "E", "F", "G", "H"},
+			expectedBuffer: []string{"A", "A", "B", "C", "D", "E", "F", "G", "H"},
 			expectedStart:  1,
 			expectedEnd:    1,
 		},
@@ -1222,8 +1272,8 @@ func TestCmdTransferLines(t *testing.T) {
 }
 
 // TestCmdUndo tests the undo (u) command.
-func TestCmdUndo(*testing.T) {
-	// TODO: TestCmdUndo
+func TestCmdUndo(t *testing.T) {
+	t.SkipNow()
 }
 
 // TestCmdWrite tests the write commands (w, wq, W).
