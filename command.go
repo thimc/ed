@@ -52,8 +52,11 @@ func (ed *Editor) DoCommand() (err error) {
 			if line == "." {
 				break
 			}
-			ed.Lines = append(ed.Lines[:ed.End+1], ed.Lines[ed.End:]...)
-			ed.Lines[ed.End] = line
+			if ed.End > len(ed.Lines) {
+				ed.Lines = append(ed.Lines[:ed.End], line)
+			} else {
+				ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
+			}
 			ed.End++
 			ed.Start = ed.End
 			ed.Dot = ed.End
