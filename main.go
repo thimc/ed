@@ -38,9 +38,10 @@ func main() {
 	if len(args) == 1 {
 		var err error
 		ed.Lines, err = ed.ReadFile(args[0])
-		if !ed.printError(err) {
-			ed.Path = args[0]
+		if err != nil {
+			fmt.Fprintf(ed.err, "%s\n", err)
 		}
+		ed.Path = args[0]
 	}
 	for {
 		if err := ed.ReadInput(os.Stdin); err != nil {
