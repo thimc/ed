@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -33,6 +34,7 @@ var (
 	ErrInvalidMark         = errors.New("invalid mark character")
 	ErrInvalidNumber       = errors.New("number out of range")
 	ErrInvalidPatternDelim = errors.New("invalid pattern delimiter")
+	ErrNothingToUndo       = errors.New("nothing to undo")
 	ErrNoCmd               = errors.New("no command")
 	ErrNoFileName          = errors.New("no current filename")
 	ErrNoMatch             = errors.New("no match")
@@ -57,6 +59,7 @@ type Editor struct {
 	addr        int             // internal address
 	s           scanner.Scanner // token scanner for the input byte array
 	tok         rune            // current token
+	undo        [][]undoOp      // undo history
 	Error       error           // previous error
 	scroll      int             // previous scroll value
 	search      string          // previous search criteria for /, ? or s
@@ -72,6 +75,31 @@ type Editor struct {
 	in          io.Reader       // standard input
 	out         io.Writer       // standard output
 	err         io.Writer       // standard error
+}
+
+type undoAction int
+
+const (
+	undoAdd undoAction = iota
+	undoDelete
+)
+
+// undoAdd readds lines
+// undoDelete deletes lines
+
+// 	undoAppend undoAction = iota
+// 	undoInsert
+// 	undoChange
+// 	undoMove
+// 	undoDelete
+
+type undoOp struct {
+	action undoAction
+	start  int
+	end    int
+	dstart int
+	dend   int
+	lines  []string
 }
 
 // NewEditor returns a new Editor.
@@ -361,6 +389,34 @@ func (ed *Editor) skipWhitespace() {
 	for ed.tok == ' ' || ed.tok == '\t' || ed.tok == '\n' {
 		ed.tok = ed.s.Scan()
 	}
+}
+
+// Undo undoes the last command and restores the current address to
+// what it was before the last command.
+func (ed *Editor) Undo() (err error) {
+	if len(ed.undo) < 1 {
+		return ErrNothingToUndo
+	}
+	operation := ed.undo[len(ed.undo)-1]
+	ed.undo = ed.undo[:len(ed.undo)-1]
+	log.Printf("%d undo operations\n", len(operation))
+	for n := len(operation)-1; n >= 0; n-- {
+		op := operation[n]
+		log.Printf("Executing undo action [%d/%d] %+v", n, len(operation), op)
+		switch op.action {
+		case undoDelete:
+			log.Printf("Delete")
+			ed.Lines = append(ed.Lines[:op.start], ed.Lines[op.end:]...)
+		case undoAdd:
+			log.Printf("Add")
+			ed.Lines = append(ed.Lines[:op.start-1], append(op.lines, ed.Lines[op.end:]...)...)
+		}
+		log.Printf(" -> %+v", ed.Lines)
+		ed.Start = op.start
+		ed.End = op.start
+		ed.Dot = op.start
+	}
+	return nil
 }
 
 // dump is a helper function that is used to print the state of the program.

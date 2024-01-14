@@ -18,6 +18,8 @@ func (ed *Editor) DoCommand() (err error) {
 			ed.Error = err
 		}
 	}()
+	var ul []string
+	var uo []undoOp
 	switch ed.tok {
 	case 'a':
 		for {
@@ -35,12 +37,17 @@ func (ed *Editor) DoCommand() (err error) {
 				ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
 			}
 			ed.End++
+			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End})
 			ed.Start = ed.End
 			ed.Dot = ed.End
 			ed.Dirty = true
 		}
+		ed.undo = append(ed.undo, uo)
 		return nil
 	case 'c':
+		ul = make([]string, ed.End-ed.Start+1)
+		copy(ul, ed.Lines[ed.Start-1:ed.End])
+		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, lines: ul})
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		ed.End = ed.Start - 1
 		for {
@@ -58,16 +65,22 @@ func (ed *Editor) DoCommand() (err error) {
 				ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
 			}
 			ed.End++
+			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End})
 			ed.Start = ed.End
 			ed.Dot = ed.End
 			ed.Dirty = true
 		}
+		ed.undo = append(ed.undo, uo)
 		return nil
 	case 'd':
+		ul = make([]string, ed.End-ed.Start+1)
+		copy(ul, ed.Lines[ed.Start-1:ed.End])
+		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, lines: ul})
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		if ed.Start > len(ed.Lines) {
 			ed.Start = len(ed.Lines)
 		}
+		ed.undo = append(ed.undo, uo)
 		ed.End = ed.Start
 		ed.Dot = ed.Start
 		ed.Dirty = true
@@ -236,10 +249,13 @@ func (ed *Editor) DoCommand() (err error) {
 				ed.Lines[ed.End-1] = line
 			}
 			ed.Dirty = true
+			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End})
 			ed.End++
 		}
+		ed.undo = append(ed.undo, uo)
 		ed.End--
 		ed.Start = ed.End
+		ed.Dot = ed.End
 		return nil
 	case 'j':
 		if ed.End == ed.Start {
@@ -248,9 +264,14 @@ func (ed *Editor) DoCommand() (err error) {
 		if ed.End > len(ed.Lines) {
 			return ErrInvalidAddress
 		}
+		ul = make([]string, ed.End-ed.Start+1)
+		copy(ul, ed.Lines[ed.Start-1:ed.End])
 		var joined string = strings.Join(ed.Lines[ed.Start-1:ed.End], "")
+		uo = append(uo, undoOp{action: undoAdd, start: ed.End - len(ul) + 1, end: ed.End - len(ul), lines: ul})
 		var result []string = append(append([]string{}, ed.Lines[:ed.Start-1]...), joined)
 		ed.Lines = append(result, ed.Lines[ed.End:]...)
+		uo = append(uo, undoOp{action: undoDelete, start: ed.Start - 1, end: ed.Start})
+		ed.undo = append(ed.undo, uo)
 		ed.End = ed.Start
 		ed.Dot = ed.Start
 		ed.Dirty = true
@@ -270,25 +291,32 @@ func (ed *Editor) DoCommand() (err error) {
 		return nil
 	case 'm':
 		var err error
-		var n, dst int
+		var dst int
 		ed.tok = ed.s.Scan()
-		n, err = ed.scanNumber()
+		dst, err = ed.scanNumber()
 		if err != nil {
 			ed.Start = ed.Dot
 			ed.End = ed.Dot
 			return ErrInvalidCmdSuffix
 		}
-		if n < 0 || n > len(ed.Lines) {
+		if dst < 0 || dst > len(ed.Lines) {
 			return ErrDestinationExpected
+		}
+		if ed.Start <= dst && dst < ed.End {
+			return ErrInvalidAddress
 		}
 		lines := make([]string, ed.End-ed.Start+1)
 		copy(lines, ed.Lines[ed.Start-1:ed.End])
+		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, lines: lines})
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
-		dst = n
-		if n-len(lines) < 0 {
-			dst = len(lines) + n
+		if dst-len(lines) < 0 {
+			dst = len(lines) + dst
 		}
 		ed.Lines = append(ed.Lines[:dst-len(lines)], append(lines, ed.Lines[dst-len(lines):]...)...)
+		ul = make([]string, len(lines))
+		copy(ul, ed.Lines[dst-len(lines):dst])
+		uo = append(uo, undoOp{action: undoDelete, start: dst - len(lines), end: dst})
+		ed.undo = append(ed.undo, uo)
 		ed.End = dst
 		ed.Start = dst
 		ed.Dot = dst
@@ -364,15 +392,16 @@ func (ed *Editor) DoCommand() (err error) {
 		for _, line := range lines {
 			if len(ed.Lines) < len(lines) {
 				ed.Lines = append(ed.Lines, line)
-				ed.Start++
-				ed.End++
-				continue
+			} else {
+				ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
 			}
-			ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
 			ed.Dirty = true
 			ed.End++
+			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End})
 		}
+		ed.undo = append(ed.undo, uo)
 		ed.Start = ed.End
+		ed.Dot = ed.End
 		return nil
 	case 's':
 		ed.tok = ed.s.Scan()
@@ -477,25 +506,27 @@ func (ed *Editor) DoCommand() (err error) {
 		if err != nil {
 			return ErrDestinationExpected
 		}
-		if ed.Start-1 < 0 {
+		if ed.Start-1 < 0 || ed.End > len(ed.Lines) || dst > len(ed.Lines) || dst < 0 {
 			return ErrInvalidAddress
 		}
 		var lines []string = make([]string, ed.End-ed.Start+1)
 		copy(lines, ed.Lines[ed.Start-1:ed.End])
 		ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
 		ed.End = dst + len(lines)
+		uo = append(uo, undoOp{action: undoDelete, start: dst, end: dst + len(lines)})
+		ed.undo = append(ed.undo, uo)
 		ed.Start = ed.End
+		ed.Dot = ed.End
 		ed.Dirty = true
 		return nil
 	case 'u':
-		// if ed.s.Pos().Offset != 1 {
-		// 	return ErrUnexpectedAddress
-		// }
-		// if ed.s.Peek() != scanner.EOF {
-		// 	return ErrInvalidCmdSuffix
-		// }
-		// return ed.Undo()
-		return nil
+		if ed.s.Pos().Offset != 1 {
+			return ErrUnexpectedAddress
+		}
+		if ed.s.Peek() != scanner.EOF {
+			return ErrInvalidCmdSuffix
+		}
+		return ed.Undo()
 	case 'W':
 		fallthrough
 	case 'w':
