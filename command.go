@@ -49,7 +49,7 @@ func (ed *Editor) DoCommand() (err error) {
 	case 'c':
 		ul = make([]string, ed.End-ed.Start+1)
 		copy(ul, ed.Lines[ed.Start-1:ed.End])
-		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, lines: ul})
+		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.Start+len(ul)-1, lines: ul})
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		ed.End = ed.Start - 1
 		for {
@@ -76,7 +76,7 @@ func (ed *Editor) DoCommand() (err error) {
 	case 'd':
 		ul = make([]string, ed.End-ed.Start+1)
 		copy(ul, ed.Lines[ed.Start-1:ed.End])
-		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, lines: ul})
+		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.End+len(ul)-1, lines: ul})
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		if ed.Start > len(ed.Lines) {
 			ed.Start = len(ed.Lines)
@@ -230,6 +230,7 @@ func (ed *Editor) DoCommand() (err error) {
 		}
 		return nil
 	case 'i':
+		d := ed.End
 		for {
 			line, err := ed.ReadInsert()
 			if err != nil {
@@ -249,7 +250,7 @@ func (ed *Editor) DoCommand() (err error) {
 				ed.Lines[ed.End-1] = line
 			}
 			ed.Dirty = true
-			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End})
+			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End, d: d})
 			ed.End++
 		}
 		ed.End--
@@ -305,7 +306,7 @@ func (ed *Editor) DoCommand() (err error) {
 		}
 		lines := make([]string, ed.End-ed.Start+1)
 		copy(lines, ed.Lines[ed.Start-1:ed.End])
-		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, lines: lines})
+		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.End+1, lines: lines})
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		if dst-len(lines) < 0 {
 			dst = len(lines) + dst
@@ -443,9 +444,15 @@ func (ed *Editor) DoCommand() (err error) {
 		var match bool
 		var s int = ed.Start - 1
 		var e int = ed.End
+		var d int
+		var first bool = true
 		for i := e - 1; i >= s; i-- {
 			n = N
 			if re.MatchString(ed.Lines[i]) {
+				if first {
+					d = i
+					first = false
+				}
 				match = true
 				ul = make([]string, 1)
 				copy(ul, []string{ed.Lines[i]})
@@ -486,9 +493,10 @@ func (ed *Editor) DoCommand() (err error) {
 					}
 					return s
 				})
-				ed.End = i + 1
-				ed.Start = i + 1
-				uo = append(uo, undoOp{action: undoAdd, start: i + 1, end: i, lines: ul})
+				ed.Start = d + 1
+				ed.End = ed.Start
+				ed.Dot = ed.Start
+				uo = append(uo, undoOp{action: undoAdd, start: i + 1, end: i, d: e, lines: ul})
 				uo = append(uo, undoOp{action: undoDelete, start: i, end: i + 1, lines: []string{ed.Lines[i]}})
 				ed.Dirty = true
 			}
@@ -513,7 +521,7 @@ func (ed *Editor) DoCommand() (err error) {
 		copy(lines, ed.Lines[ed.Start-1:ed.End])
 		ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
 		ed.End = dst + len(lines)
-		uo = append(uo, undoOp{action: undoDelete, start: dst, end: dst + len(lines)})
+		uo = append(uo, undoOp{action: undoDelete, start: dst, end: dst + len(lines), d: dst+1})
 		ed.Start = ed.End
 		ed.Dot = ed.End
 		ed.Dirty = true

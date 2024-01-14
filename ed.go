@@ -97,8 +97,7 @@ type undoOp struct {
 	action undoAction
 	start  int
 	end    int
-	dstart int
-	dend   int
+	d      int
 	lines  []string
 }
 
@@ -399,6 +398,7 @@ func (ed *Editor) Undo() (err error) {
 	}
 	operation := ed.undo[len(ed.undo)-1]
 	ed.undo = ed.undo[:len(ed.undo)-1]
+	var e int
 	for n := len(operation) - 1; n >= 0; n-- {
 		op := operation[n]
 		switch op.action {
@@ -407,10 +407,18 @@ func (ed *Editor) Undo() (err error) {
 		case undoAdd:
 			ed.Lines = append(ed.Lines[:op.start-1], append(op.lines, ed.Lines[op.end:]...)...)
 		}
-		ed.Start = op.start
-		ed.End = op.start
-		ed.Dot = op.start
+		if op.d > 0 {
+			e = op.d
+			op.end = op.d
+		}
+		if op.end > len(ed.Lines) {
+			op.end = len(ed.Lines)
+		}
+		e = op.end
 	}
+	ed.Start = e
+	ed.End = e
+	ed.Dot = e
 	return nil
 }
 
