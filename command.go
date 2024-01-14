@@ -13,13 +13,16 @@ import (
 // DoCommand will run ed commands on one line or a range specified by
 // the Start and End position and set them accordingly.
 func (ed *Editor) DoCommand() (err error) {
+	var ul []string
+	var uo []undoOp
 	defer func() {
+		if len(uo) > 0 && !ed.g {
+			ed.undo = append(ed.undo, uo)
+		}
 		if err != nil {
 			ed.Error = err
 		}
 	}()
-	var ul []string
-	var uo []undoOp
 	switch ed.tok {
 	case 'a':
 		for {
@@ -42,7 +45,6 @@ func (ed *Editor) DoCommand() (err error) {
 			ed.Dot = ed.End
 			ed.Dirty = true
 		}
-		ed.undo = append(ed.undo, uo)
 		return nil
 	case 'c':
 		ul = make([]string, ed.End-ed.Start+1)
@@ -70,7 +72,6 @@ func (ed *Editor) DoCommand() (err error) {
 			ed.Dot = ed.End
 			ed.Dirty = true
 		}
-		ed.undo = append(ed.undo, uo)
 		return nil
 	case 'd':
 		ul = make([]string, ed.End-ed.Start+1)
@@ -80,7 +81,6 @@ func (ed *Editor) DoCommand() (err error) {
 		if ed.Start > len(ed.Lines) {
 			ed.Start = len(ed.Lines)
 		}
-		ed.undo = append(ed.undo, uo)
 		ed.End = ed.Start
 		ed.Dot = ed.Start
 		ed.Dirty = true
@@ -252,7 +252,6 @@ func (ed *Editor) DoCommand() (err error) {
 			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End})
 			ed.End++
 		}
-		ed.undo = append(ed.undo, uo)
 		ed.End--
 		ed.Start = ed.End
 		ed.Dot = ed.End
@@ -271,7 +270,6 @@ func (ed *Editor) DoCommand() (err error) {
 		var result []string = append(append([]string{}, ed.Lines[:ed.Start-1]...), joined)
 		ed.Lines = append(result, ed.Lines[ed.End:]...)
 		uo = append(uo, undoOp{action: undoDelete, start: ed.Start - 1, end: ed.Start})
-		ed.undo = append(ed.undo, uo)
 		ed.End = ed.Start
 		ed.Dot = ed.Start
 		ed.Dirty = true
@@ -316,7 +314,6 @@ func (ed *Editor) DoCommand() (err error) {
 		ul = make([]string, len(lines))
 		copy(ul, ed.Lines[dst-len(lines):dst])
 		uo = append(uo, undoOp{action: undoDelete, start: dst - len(lines), end: dst})
-		ed.undo = append(ed.undo, uo)
 		ed.End = dst
 		ed.Start = dst
 		ed.Dot = dst
@@ -399,7 +396,6 @@ func (ed *Editor) DoCommand() (err error) {
 			ed.End++
 			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End})
 		}
-		ed.undo = append(ed.undo, uo)
 		ed.Start = ed.End
 		ed.Dot = ed.End
 		return nil
@@ -447,10 +443,12 @@ func (ed *Editor) DoCommand() (err error) {
 		var match bool
 		var s int = ed.Start - 1
 		var e int = ed.End
-		for i := s; i < e; i++ {
+		for i := e - 1; i >= s; i-- {
 			n = N
 			if re.MatchString(ed.Lines[i]) {
 				match = true
+				ul = make([]string, 1)
+				copy(ul, []string{ed.Lines[i]})
 				submatch := re.FindAllStringSubmatch(ed.Lines[i], -1)
 				// TODO: Fix submatches
 				ed.Lines[i] = re.ReplaceAllStringFunc(ed.Lines[i], func(s string) string {
@@ -490,6 +488,8 @@ func (ed *Editor) DoCommand() (err error) {
 				})
 				ed.End = i + 1
 				ed.Start = i + 1
+				uo = append(uo, undoOp{action: undoAdd, start: i + 1, end: i, lines: ul})
+				uo = append(uo, undoOp{action: undoDelete, start: i, end: i + 1, lines: []string{ed.Lines[i]}})
 				ed.Dirty = true
 			}
 		}
@@ -514,7 +514,6 @@ func (ed *Editor) DoCommand() (err error) {
 		ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
 		ed.End = dst + len(lines)
 		uo = append(uo, undoOp{action: undoDelete, start: dst, end: dst + len(lines)})
-		ed.undo = append(ed.undo, uo)
 		ed.Start = ed.End
 		ed.Dot = ed.End
 		ed.Dirty = true

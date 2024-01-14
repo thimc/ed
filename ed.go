@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -60,6 +59,7 @@ type Editor struct {
 	s           scanner.Scanner // token scanner for the input byte array
 	tok         rune            // current token
 	undo        [][]undoOp      // undo history
+	g           bool            // global command state
 	Error       error           // previous error
 	scroll      int             // previous scroll value
 	search      string          // previous search criteria for /, ? or s
@@ -399,19 +399,14 @@ func (ed *Editor) Undo() (err error) {
 	}
 	operation := ed.undo[len(ed.undo)-1]
 	ed.undo = ed.undo[:len(ed.undo)-1]
-	log.Printf("%d undo operations\n", len(operation))
-	for n := len(operation)-1; n >= 0; n-- {
+	for n := len(operation) - 1; n >= 0; n-- {
 		op := operation[n]
-		log.Printf("Executing undo action [%d/%d] %+v", n, len(operation), op)
 		switch op.action {
 		case undoDelete:
-			log.Printf("Delete")
 			ed.Lines = append(ed.Lines[:op.start], ed.Lines[op.end:]...)
 		case undoAdd:
-			log.Printf("Add")
 			ed.Lines = append(ed.Lines[:op.start-1], append(op.lines, ed.Lines[op.end:]...)...)
 		}
-		log.Printf(" -> %+v", ed.Lines)
 		ed.Start = op.start
 		ed.End = op.start
 		ed.Dot = op.start
