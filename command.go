@@ -49,7 +49,7 @@ func (ed *Editor) DoCommand() (err error) {
 	case 'c':
 		ul = make([]string, ed.End-ed.Start+1)
 		copy(ul, ed.Lines[ed.Start-1:ed.End])
-		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.Start+len(ul)-1, lines: ul})
+		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.Start + len(ul) - 1, lines: ul})
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		ed.End = ed.Start - 1
 		for {
@@ -76,7 +76,7 @@ func (ed *Editor) DoCommand() (err error) {
 	case 'd':
 		ul = make([]string, ed.End-ed.Start+1)
 		copy(ul, ed.Lines[ed.Start-1:ed.End])
-		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.End+len(ul)-1, lines: ul})
+		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.End + len(ul) - 1, lines: ul})
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		if ed.Start > len(ed.Lines) {
 			ed.Start = len(ed.Lines)
@@ -267,7 +267,7 @@ func (ed *Editor) DoCommand() (err error) {
 		ul = make([]string, ed.End-ed.Start+1)
 		copy(ul, ed.Lines[ed.Start-1:ed.End])
 		var joined string = strings.Join(ed.Lines[ed.Start-1:ed.End], "")
-		uo = append(uo, undoOp{action: undoAdd, start: ed.End - len(ul) + 1, end: ed.End - len(ul), lines: ul})
+		uo = append(uo, undoOp{action: undoAdd, start: ed.End - len(ul) + 1, end: ed.End - len(ul), d: ed.End + len(ul), lines: ul})
 		var result []string = append(append([]string{}, ed.Lines[:ed.Start-1]...), joined)
 		ed.Lines = append(result, ed.Lines[ed.End:]...)
 		uo = append(uo, undoOp{action: undoDelete, start: ed.Start - 1, end: ed.Start})
@@ -306,7 +306,7 @@ func (ed *Editor) DoCommand() (err error) {
 		}
 		lines := make([]string, ed.End-ed.Start+1)
 		copy(lines, ed.Lines[ed.Start-1:ed.End])
-		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.End+1, lines: lines})
+		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.End + 1, lines: lines})
 		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
 		if dst-len(lines) < 0 {
 			dst = len(lines) + dst
@@ -521,7 +521,7 @@ func (ed *Editor) DoCommand() (err error) {
 		copy(lines, ed.Lines[ed.Start-1:ed.End])
 		ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
 		ed.End = dst + len(lines)
-		uo = append(uo, undoOp{action: undoDelete, start: dst, end: dst + len(lines), d: dst+1})
+		uo = append(uo, undoOp{action: undoDelete, start: dst, end: dst + len(lines), d: dst + 1})
 		ed.Start = ed.End
 		ed.Dot = ed.End
 		ed.Dirty = true
