@@ -172,8 +172,6 @@ func (ed *Editor) DoCommand() (err error) {
 		}
 		if cmd == "" && !i {
 			cmd = "p"
-		} else if cmd == "&" && i {
-			cmd = ed.globalCmd
 		}
 		for idx := s - 1; idx < e; idx++ {
 			match, err := regexp.MatchString(search, ed.Lines[idx])
@@ -186,6 +184,20 @@ func (ed *Editor) DoCommand() (err error) {
 			ed.Start = idx + 1
 			ed.End = ed.Start
 			ed.Dot = ed.End
+			if i {
+				fmt.Fprintf(ed.out, "%s\n", ed.Lines[idx])
+				line, err := ed.ReadInsert()
+				if err != nil {
+					return err
+				}
+				cmd = line
+				switch cmd {
+				case "":
+					continue
+				case "&":
+					cmd = ed.globalCmd
+				}
+			}
 			ed.ReadInput(strings.NewReader(cmd))
 			if err := ed.DoCommand(); err != nil {
 				return err
@@ -193,8 +205,8 @@ func (ed *Editor) DoCommand() (err error) {
 			if e > len(ed.Lines) {
 				e = len(ed.Lines)
 			}
+			ed.globalCmd = cmd
 		}
-		ed.globalCmd = cmd
 		return nil
 	case 'H':
 		ed.printErrors = !ed.printErrors
