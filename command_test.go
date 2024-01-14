@@ -1284,7 +1284,6 @@ func TestCmdTransferLines(t *testing.T) {
 func TestCmdUndo(t *testing.T) {
 	var ted *Editor
 	tests := []struct {
-		name           string
 		input          []string
 		data           []string
 		expectedBuffer [][]string
@@ -1292,7 +1291,6 @@ func TestCmdUndo(t *testing.T) {
 		expectedEnd    []int
 	}{
 		{
-			name:           "append one",
 			input:          []string{"a", "a", "u"},
 			data:           []string{"A\nB\n.", "C\n.", ""},
 			expectedBuffer: [][]string{{"A", "B"}, {"A", "B", "C"}, {"A", "B"}},
@@ -1300,7 +1298,6 @@ func TestCmdUndo(t *testing.T) {
 			expectedEnd:    []int{2, 3, 2},
 		},
 		{
-			name:           "append many",
 			input:          []string{"a", "a", "u"},
 			data:           []string{"A\nB\n.", "C\nD\nE\n.", ""},
 			expectedBuffer: [][]string{{"A", "B"}, {"A", "B", "C", "D", "E"}, {"A", "B"}},
@@ -1308,39 +1305,6 @@ func TestCmdUndo(t *testing.T) {
 			expectedEnd:    []int{2, 5, 2},
 		},
 		{
-			name:           "insert one",
-			input:          []string{"a", "2i", "u"},
-			data:           []string{"A\nC\n.", "B\n.", ""},
-			expectedBuffer: [][]string{{"A", "C"}, {"A", "B", "C"}, {"A", "C"}},
-			expectedStart:  []int{2, 2, 2},
-			expectedEnd:    []int{2, 2, 2},
-		},
-		{
-			name:           "insert many",
-			input:          []string{"a", "2i", "u"},
-			data:           []string{"A\nE\n.", "B\nC\nD\n.", ""},
-			expectedBuffer: [][]string{{"A", "E"}, {"A", "B", "C", "D", "E"}, {"A", "E"}},
-			expectedStart:  []int{2, 4, 2},
-			expectedEnd:    []int{2, 4, 2},
-		},
-		{
-			name:           "delete one",
-			input:          []string{"a", "d", "u"},
-			data:           []string{"A\nB\n.", "", ""},
-			expectedBuffer: [][]string{{"A", "B"}, {"A"}, {"A", "B"}},
-			expectedStart:  []int{2, 1, 2},
-			expectedEnd:    []int{2, 1, 2},
-		},
-		{
-			name:           "delete many",
-			input:          []string{"a", "1,2d", "u"},
-			data:           []string{"A\nB\nC\n.", "", ""},
-			expectedBuffer: [][]string{{"A", "B", "C"}, {"C"}, {"A", "B", "C"}},
-			expectedStart:  []int{3, 1, 3},
-			expectedEnd:    []int{3, 1, 3},
-		},
-		{
-			name:           "change one",
 			input:          []string{"a", "1,2c", "u"},
 			data:           []string{"A\nB\n.", "C\n.", ""},
 			expectedBuffer: [][]string{{"A", "B"}, {"C"}, {"A", "B"}},
@@ -1348,7 +1312,6 @@ func TestCmdUndo(t *testing.T) {
 			expectedEnd:    []int{2, 1, 2},
 		},
 		{
-			name:           "change many",
 			input:          []string{"a", "1,2c", "u"},
 			data:           []string{"A\nB\n.", "C\nD\n.", ""},
 			expectedBuffer: [][]string{{"A", "B"}, {"C", "D"}, {"A", "B"}},
@@ -1356,7 +1319,34 @@ func TestCmdUndo(t *testing.T) {
 			expectedEnd:    []int{2, 2, 2},
 		},
 		{
-			name:           "join many",
+			input:          []string{"a", "d", "u"},
+			data:           []string{"A\nB\n.", "", ""},
+			expectedBuffer: [][]string{{"A", "B"}, {"A"}, {"A", "B"}},
+			expectedStart:  []int{2, 1, 2},
+			expectedEnd:    []int{2, 1, 2},
+		},
+		{
+			input:          []string{"a", "1,2d", "u"},
+			data:           []string{"A\nB\nC\n.", "", ""},
+			expectedBuffer: [][]string{{"A", "B", "C"}, {"C"}, {"A", "B", "C"}},
+			expectedStart:  []int{3, 1, 3},
+			expectedEnd:    []int{3, 1, 3},
+		},
+		{
+			input:          []string{"a", "2i", "u"},
+			data:           []string{"A\nC\n.", "B\n.", ""},
+			expectedBuffer: [][]string{{"A", "C"}, {"A", "B", "C"}, {"A", "C"}},
+			expectedStart:  []int{2, 2, 2},
+			expectedEnd:    []int{2, 2, 2},
+		},
+		{
+			input:          []string{"a", "2i", "u"},
+			data:           []string{"A\nE\n.", "B\nC\nD\n.", ""},
+			expectedBuffer: [][]string{{"A", "E"}, {"A", "B", "C", "D", "E"}, {"A", "E"}},
+			expectedStart:  []int{2, 4, 2},
+			expectedEnd:    []int{2, 4, 2},
+		},
+		{
 			input:          []string{"a", "1,2j", "u"},
 			data:           []string{"A\nB\nC\n.", "", ""},
 			expectedBuffer: [][]string{{"A", "B", "C"}, {"AB", "C"}, {"A", "B", "C"}},
@@ -1364,7 +1354,6 @@ func TestCmdUndo(t *testing.T) {
 			expectedEnd:    []int{3, 1, 3},
 		},
 		{
-			name:           "join more",
 			input:          []string{"a", "2,4j", "u"},
 			data:           []string{"A\nB\nC\nD\nE\nF\nG\n.", "", ""},
 			expectedBuffer: [][]string{{"A", "B", "C", "D", "E", "F", "G"}, {"A", "BCD", "E", "F", "G"}, {"A", "B", "C", "D", "E", "F", "G"}},
@@ -1372,31 +1361,6 @@ func TestCmdUndo(t *testing.T) {
 			expectedEnd:    []int{7, 2, 7},
 		},
 		{
-			name:           "transfer one",
-			input:          []string{"a", "1t2", "u"},
-			data:           []string{"A\nB\n.", "", ""},
-			expectedBuffer: [][]string{{"A", "B"}, {"A", "B", "A"}, {"A", "B"}},
-			expectedStart:  []int{2, 3, 2},
-			expectedEnd:    []int{2, 3, 2},
-		},
-		{
-			name:           "transfer many to zero",
-			input:          []string{"a", "1,2t0", "u"},
-			data:           []string{"A\nB\nC\n.", "", ""},
-			expectedBuffer: [][]string{{"A", "B", "C"}, {"A", "B", "A", "B", "C"}, {"A", "B", "C"}},
-			expectedStart:  []int{3, 2, 1},
-			expectedEnd:    []int{3, 2, 1},
-		},
-		{
-			name:           "transfer many",
-			input:          []string{"a", "1,2t3", "u"},
-			data:           []string{"A\nB\nC\n.", "", ""},
-			expectedBuffer: [][]string{{"A", "B", "C"}, {"A", "B", "C", "A", "B"}, {"A", "B", "C"}},
-			expectedStart:  []int{3, 5, 3},
-			expectedEnd:    []int{3, 5, 3},
-		},
-		{
-			name:           "move one---1m2",
 			input:          []string{"a", "2m0", "u"},
 			data:           []string{"A\nB\nC\n.", "", ""},
 			expectedBuffer: [][]string{{"A", "B", "C"}, {"B", "A", "C"}, {"A", "B", "C"}},
@@ -1404,18 +1368,52 @@ func TestCmdUndo(t *testing.T) {
 			expectedEnd:    []int{3, 1, 3},
 		},
 		{
-			name:           "move many---1,2m3",
 			input:          []string{"a", "2,3m0", "u"},
 			data:           []string{"A\nB\nC\n.", "", ""},
 			expectedBuffer: [][]string{{"A", "B", "C"}, {"B", "C", "A"}, {"A", "B", "C"}},
 			expectedStart:  []int{3, 2, 3},
 			expectedEnd:    []int{3, 2, 3},
 		},
+		{
+			input:          []string{"a", "r !ls main.go", "u"},
+			data:           []string{"A\n.", "", ""},
+			expectedBuffer: [][]string{{"A"}, {"A", "main.go"}, {"A"}},
+			expectedStart:  []int{1, 2, 1},
+			expectedEnd:    []int{1, 2, 1},
+		},
+		{
+			input:          []string{"a", "1r !ls main.go", "u"},
+			data:           []string{"A\nB\n.", "", ""},
+			expectedBuffer: [][]string{{"A", "B"}, {"A", "main.go", "B"}, {"A", "B"}},
+			expectedStart:  []int{2, 2, 2},
+			expectedEnd:    []int{2, 2, 2},
+		},
+		{
+			input:          []string{"a", "1t2", "u"},
+			data:           []string{"A\nB\n.", "", ""},
+			expectedBuffer: [][]string{{"A", "B"}, {"A", "B", "A"}, {"A", "B"}},
+			expectedStart:  []int{2, 3, 2},
+			expectedEnd:    []int{2, 3, 2},
+		},
+		{
+			input:          []string{"a", "1,2t0", "u"},
+			data:           []string{"A\nB\nC\n.", "", ""},
+			expectedBuffer: [][]string{{"A", "B", "C"}, {"A", "B", "A", "B", "C"}, {"A", "B", "C"}},
+			expectedStart:  []int{3, 2, 1},
+			expectedEnd:    []int{3, 2, 1},
+		},
+		{
+			input:          []string{"a", "1,2t3", "u"},
+			data:           []string{"A\nB\nC\n.", "", ""},
+			expectedBuffer: [][]string{{"A", "B", "C"}, {"A", "B", "C", "A", "B"}, {"A", "B", "C"}},
+			expectedStart:  []int{3, 5, 3},
+			expectedEnd:    []int{3, 5, 3},
+		},
 	}
 	for _, test := range tests {
 		ted = NewEditor(nil, io.Discard, io.Discard)
 		for i := 0; i < len(test.data); i++ {
-			t.Run(test.name+" <- "+string(test.input[i]), func(t *testing.T) {
+			t.Run(strings.Join(test.input, " "), func(t *testing.T) {
 				ted.in = strings.NewReader(test.data[i])
 				ted.ReadInput(strings.NewReader(test.input[i]))
 				if err := ted.DoRange(); err != nil {
