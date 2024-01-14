@@ -44,6 +44,9 @@ func (ed *Editor) nextAddress() (int, error) {
 		case ed.tok == '?':
 			fallthrough
 		case ed.tok == '/':
+			if !first {
+				return 0, ErrInvalidAddress
+			}
 			var mod rune = ed.tok
 			ed.tok = ed.s.Scan()
 			var search string = ed.scanStringUntil(mod)
@@ -83,6 +86,9 @@ func (ed *Editor) nextAddress() (int, error) {
 			}
 			return 0, ErrNoMatch
 		case ed.tok == '\'':
+			if !first {
+				return 0, ErrInvalidAddress
+			}
 			ed.tok = ed.s.Scan()
 			var r rune = ed.tok
 			ed.tok = ed.s.Scan()
