@@ -41,7 +41,6 @@ func main() {
 		if err != nil {
 			fmt.Fprintf(ed.err, "%s\n", err)
 		}
-		ed.Path = args[0]
 	}
 	for {
 		if err := ed.ReadInput(os.Stdin); err != nil {

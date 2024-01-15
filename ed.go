@@ -197,6 +197,7 @@ func (ed *Editor) ReadFile(path string, setdot bool, printsiz bool) ([]string, e
 			siz += int64(len(line)) + 1
 		}
 	case false:
+		ed.Path = path
 		if path == "" {
 			path = ed.Path
 			if path == "" {
@@ -219,7 +220,6 @@ func (ed *Editor) ReadFile(path string, setdot bool, printsiz bool) ([]string, e
 		if err := s.Err(); err != nil {
 			return lines, err
 		}
-		ed.Path = path
 		siz = stat.Size()
 	}
 	if setdot {
