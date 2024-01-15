@@ -10,14 +10,17 @@ import (
 	"unicode"
 )
 
-// DoCommand will run ed commands on one line or a range specified by
-// the Start and End position and set them accordingly.
+// DoCommand executes a command on a range defined by start and end.
 func (ed *Editor) DoCommand() (err error) {
 	var ul []string
 	var uo []undoOp
 	defer func() {
-		if len(uo) > 0 && !ed.g {
-			ed.undo = append(ed.undo, uo)
+		if len(uo) > 0 {
+			if !ed.g {
+				ed.undo = append(ed.undo, uo)
+			} else {
+				ed.globalUndo = append(ed.globalUndo, uo...)
+			}
 		}
 		if err != nil {
 			ed.Error = err
@@ -127,6 +130,9 @@ func (ed *Editor) DoCommand() (err error) {
 	case 'v':
 		fallthrough
 	case 'g':
+		if ed.g {
+			return ErrCannotNestGlobal
+		}
 		var i bool = (ed.tok == 'G' || ed.tok == 'V')
 		var v bool = (ed.tok == 'v' || ed.tok == 'V')
 		if ed.s.Pos().Offset == 1 {
@@ -154,6 +160,12 @@ func (ed *Editor) DoCommand() (err error) {
 		if cmd == "" && !i {
 			cmd = "p"
 		}
+		ed.globalUndo = []undoOp{}
+		ed.g = true
+		defer func() {
+			ed.g = false
+			ed.undo = append(ed.undo, ed.globalUndo)
+		}()
 		for idx := s - 1; idx < e; idx++ {
 			match, err := regexp.MatchString(search, ed.Lines[idx])
 			if err != nil {

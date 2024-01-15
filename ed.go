@@ -23,6 +23,7 @@ const (
 
 var (
 	ErrDefault             = errors.New("?") // descriptive error message, don't you think?
+	ErrCannotNestGlobal    = errors.New("cannot nest global commands")
 	ErrCannotOpenFile      = errors.New("cannot open input file")
 	ErrCannotReadFile      = errors.New("cannot read input file")
 	ErrDestinationExpected = errors.New("destination expected")
@@ -59,6 +60,7 @@ type Editor struct {
 	s           scanner.Scanner // token scanner for the input byte array
 	tok         rune            // current token
 	undo        [][]undoOp      // undo history
+	globalUndo  []undoOp        // undo actions caught during global cmds
 	g           bool            // global command state
 	Error       error           // previous error
 	scroll      int             // previous scroll value
