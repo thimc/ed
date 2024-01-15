@@ -33,12 +33,12 @@ var (
 	ErrInvalidMark         = errors.New("invalid mark character")
 	ErrInvalidNumber       = errors.New("number out of range")
 	ErrInvalidPatternDelim = errors.New("invalid pattern delimiter")
-	ErrNothingToUndo       = errors.New("nothing to undo")
 	ErrNoCmd               = errors.New("no command")
 	ErrNoFileName          = errors.New("no current filename")
 	ErrNoMatch             = errors.New("no match")
 	ErrNoPrevPattern       = errors.New("no previous pattern")
 	ErrNoPreviousSub       = errors.New("no previous substitution")
+	ErrNothingToUndo       = errors.New("nothing to undo")
 	ErrUnexpectedAddress   = errors.New("unexpected address")
 	ErrUnexpectedCmdSuffix = errors.New("unexpected command suffix")
 	ErrUnknownCmd          = errors.New("unknown command")
@@ -83,15 +83,6 @@ const (
 	undoAdd undoAction = iota
 	undoDelete
 )
-
-// undoAdd readds lines
-// undoDelete deletes lines
-
-// 	undoAppend undoAction = iota
-// 	undoInsert
-// 	undoChange
-// 	undoMove
-// 	undoDelete
 
 type undoOp struct {
 	action undoAction
@@ -170,34 +161,72 @@ func (ed *Editor) setupSignals() {
 	}()
 }
 
-// ReadFile function will open the file specified by 'path,' read its
-// input into the internal file buffer, and set the cursor position
-// (dot) to the last line of the buffer. If no errors occur, the size
-// of the file in bytes will be printed to the err io.Writer.
-func (ed *Editor) ReadFile(path string) ([]string, error) {
+// ReadFile checks if the 'path' starts with a '!' and if so executes
+// what it presumes to be a valid shell command in sh(1). If ReadFile
+// deems 'path' not to be a shell expression it will attempt to open
+// 'path' like a regular file.  If no error occurs and 'setdot' is
+// true, the cursor positions are set to the last line of the buffer.
+// If 'printsiz' is set to true, the size in bytes is printed to the
+// 'err io.Writer'.
+func (ed *Editor) ReadFile(path string, setdot bool, printsiz bool) ([]string, error) {
+	var siz int64
+	var cmd bool
+	if len(path) > 0 {
+		cmd = (path[0] == '!')
+		if cmd {
+			path = path[1:]
+		}
+	}
 	var lines []string
-	file, err := os.Open(path)
-	if err != nil {
-		return lines, ErrCannotOpenFile
+	switch cmd {
+	case true:
+		if path == "" {
+			path = ed.shellCmd
+			if path == "" {
+				return lines, ErrNoCmd
+			}
+		}
+		shlines, err := ed.Shell(path)
+		if err != nil {
+			return lines, ErrZero
+		}
+		for _, line := range shlines {
+			lines = append(lines, line)
+			siz += int64(len(line)) + 1
+		}
+	case false:
+		if path == "" {
+			path = ed.Path
+			if path == "" {
+				return lines, ErrNoFileName
+			}
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return lines, ErrCannotOpenFile
+		}
+		defer file.Close()
+		stat, err := os.Stat(path)
+		if err != nil {
+			return lines, ErrCannotReadFile
+		}
+		s := bufio.NewScanner(file)
+		for s.Scan() {
+			lines = append(lines, s.Text())
+		}
+		if err := s.Err(); err != nil {
+			return lines, err
+		}
+		ed.Path = path
+		siz = stat.Size()
 	}
-	defer file.Close()
-	stat, err := os.Stat(path)
-	if err != nil {
-		return lines, ErrCannotReadFile
+	if setdot {
+		ed.End = len(lines)
+		ed.Start = ed.End
+		ed.Dot = ed.End
 	}
-	s := bufio.NewScanner(file)
-	for s.Scan() {
-		lines = append(lines, s.Text())
-	}
-	if err := s.Err(); err != nil {
-		return lines, err
-	}
-	ed.Path = path
-	ed.End = len(lines)
-	ed.Start = ed.End
-	ed.Dot = ed.End
-	if !ed.Silent {
-		fmt.Fprintf(ed.err, "%d\n", stat.Size())
+	if !ed.Silent && printsiz {
+		fmt.Fprintf(ed.err, "%d\n", siz)
 	}
 	return lines, nil
 }

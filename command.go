@@ -90,50 +90,18 @@ func (ed *Editor) DoCommand() (err error) {
 	case 'e':
 		var uc bool = (ed.tok == 'E')
 		ed.tok = ed.s.Scan()
-		ed.tok = ed.s.Scan()
-		var cmd bool
-		if ed.tok == '!' {
-			ed.tok = ed.s.Scan()
-			cmd = true
-		}
 		ed.skipWhitespace()
 		var fname string = ed.scanString()
-		switch cmd {
-		case true:
-			if fname == "" && ed.shellCmd != "" {
-				fname = ed.shellCmd
-			}
-			lines, err := ed.Shell(fname)
-			if err != nil {
-				return ErrZero
-			}
-			var siz int
-			for i := range lines {
-				siz += len(lines[i]) + 1
-			}
-			ed.Lines = lines
-			ed.Dot = len(ed.Lines)
-			ed.Start = ed.Dot
-			ed.End = ed.Dot
-			fmt.Fprintf(ed.err, "%d\n", siz)
-		case false:
-			if fname == "" && ed.Path == "" {
-				return ErrNoFileName
-			}
-			if !uc && ed.Dirty {
-				ed.Dirty = false
-				return ErrFileModified
-			}
-			if fname == "" {
-				fname = ed.Path
-			}
-			var err error
-			ed.Lines, err = ed.ReadFile(fname)
-			if err != nil {
-				return err
-			}
+		if !uc && ed.Dirty {
+			ed.Dirty = false
+			return ErrFileModified
 		}
-		ed.Dirty = true
+		var lines []string
+		lines, err = ed.ReadFile(fname, true, true)
+		if err != nil {
+			return err
+		}
+		ed.Lines = lines
 		return nil
 	case 'f':
 		ed.tok = ed.s.Scan()
@@ -359,33 +327,10 @@ func (ed *Editor) DoCommand() (err error) {
 		ed.tok = ed.s.Scan()
 		ed.skipWhitespace()
 		var fname string = ed.scanString()
-		if fname == "" {
-			if ed.Path == "" {
-				return ErrNoFileName
-			}
-			fname = ed.Path
-		}
 		var lines []string
-		var err error
-		var cmd bool = (fname[0] == '!')
-		if cmd {
-			var bufsiz int
-			lines, err = ed.Shell(fname[1:])
-			if err != nil {
-				fmt.Fprintf(ed.err, "%d\n", bufsiz)
-				return nil
-			}
-			for _, ln := range lines {
-				bufsiz += int(len(ln) + 1)
-			}
-			if !ed.Silent {
-				fmt.Fprintf(ed.err, "%d\n", bufsiz)
-			}
-		} else {
-			lines, err = ed.ReadFile(fname)
-			if err != nil {
-				return err
-			}
+		lines, err = ed.ReadFile(fname, false, true)
+		if err != nil {
+			return err
 		}
 		for _, line := range lines {
 			if len(ed.Lines) < len(lines) {
@@ -606,17 +551,9 @@ func (ed *Editor) DoCommand() (err error) {
 	case '!':
 		ed.tok = ed.s.Scan()
 		ed.skipWhitespace()
-		var buf string
-		if ed.tok == scanner.EOF {
-			if ed.shellCmd != "" {
-				buf = ed.shellCmd
-			} else {
-				return ErrNoCmd
-			}
-		} else {
-			buf = ed.scanString()
-		}
-		output, err := ed.Shell(buf)
+		var buf string = ed.scanString()
+		var output []string
+		output, err = ed.ReadFile("!"+buf, false, false)
 		if err != nil {
 			return err
 		}

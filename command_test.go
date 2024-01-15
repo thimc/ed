@@ -1489,7 +1489,7 @@ func TestCmdWrite(t *testing.T) {
 			// if test.expectedEnd != ted.End {
 			// 	t.Fatalf("expected end to be %d, got %d", test.expectedEnd, ted.End)
 			// }
-			lines, err := ted.ReadFile(path)
+			lines, err := ted.ReadFile(path, true, true)
 			if err != nil {
 				t.Fatalf("expected file '%s' to exist, got error '%s'\n", path, err)
 			}

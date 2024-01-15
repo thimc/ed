@@ -37,7 +37,7 @@ func main() {
 	var args []string = flag.Args()
 	if len(args) == 1 {
 		var err error
-		ed.Lines, err = ed.ReadFile(args[0])
+		ed.Lines, err = ed.ReadFile(args[0], true, true)
 		if err != nil {
 			fmt.Fprintf(ed.err, "%s\n", err)
 		}
