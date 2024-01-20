@@ -307,6 +307,8 @@ func (ed *Editor) DoCommand() (err error) {
 	check:
 		for {
 			switch ed.tok {
+			case 'p':
+				ed.tok = ed.s.Scan()
 			case 'n':
 				numbers = true
 				ed.tok = ed.s.Scan()
