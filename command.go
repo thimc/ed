@@ -145,8 +145,7 @@ func (ed *Editor) DoCommand() (err error) {
 		if delim == ' ' || delim == scanner.EOF {
 			return ErrInvalidPatternDelim
 		}
-		var s int = ed.Start
-		var e int = ed.End
+		var s, e int = ed.Start, ed.End
 		var search string = ed.scanStringUntil(delim)
 		if ed.tok == delim {
 			ed.tok = ed.s.Scan()
@@ -269,7 +268,6 @@ func (ed *Editor) DoCommand() (err error) {
 		ed.mark[mark] = ed.End
 		return nil
 	case 'm':
-		var err error
 		var dst int
 		ed.tok = ed.s.Scan()
 		dst, err = ed.scanNumber()
@@ -362,7 +360,6 @@ func (ed *Editor) DoCommand() (err error) {
 		var search, repl string
 		var mod rune
 		var re *regexp.Regexp
-		var err error
 		ed.tok = ed.s.Scan()
 		if ed.tok == scanner.EOF {
 			if ed.search == "" && ed.replacestr == "" {
@@ -442,10 +439,7 @@ func (ed *Editor) DoCommand() (err error) {
 						ctok = cs.Scan()
 					}
 					n--
-					if all {
-						n = 0
-					}
-					if n == 0 {
+					if all || n == 0 {
 						return prepl
 					}
 					return s
@@ -515,13 +509,11 @@ func (ed *Editor) DoCommand() (err error) {
 		if fname == "" {
 			fname = ed.Path
 		}
-		var s int = ed.Start
-		var e int = ed.End
+		var s, e int = ed.Start, ed.End
 		if full {
 			s = 1
 			e = len(ed.Lines)
 		}
-		var err error
 		if r == 'w' {
 			err = ed.WriteFile(s, e, fname)
 		} else {
@@ -533,27 +525,18 @@ func (ed *Editor) DoCommand() (err error) {
 		return err
 	case 'z':
 		ed.tok = ed.s.Scan()
-		var err error
-		var scroll int
-		scroll, err = ed.scanNumber()
+		scroll, err := ed.scanNumber()
 		if err != nil || scroll == 0 {
 			scroll = ed.scroll
 		}
-		if ed.End-1 < 0 {
-			return ErrInvalidAddress
+		ed.Start = ed.End - 1
+		ed.End += scroll
+		if ed.End > len(ed.Lines) {
+			ed.End = len(ed.Lines)
 		}
-		var s int = ed.End - 1
-		var e int = ed.End + scroll
-		if e > len(ed.Lines) {
-			e = len(ed.Lines)
+		for ; ed.Start < ed.End; ed.Start++ {
+			fmt.Fprintf(ed.out, "%s\n", ed.Lines[ed.Start])
 		}
-		for i := s; i < e; i++ {
-			fmt.Fprintf(ed.out, "%s\n", ed.Lines[i])
-			ed.End = i
-			ed.Start = i
-		}
-		ed.Start++
-		ed.End++
 		ed.Dot = ed.Start + 1
 		ed.scroll = scroll
 		return nil
