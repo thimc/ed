@@ -363,7 +363,7 @@ func (ed *Editor) checkRange() error {
 			return nil
 		}
 	}
-	if ed.Start > ed.End || ed.Start < 1 || ed.End < 1 || ed.End > len(ed.Lines) {
+	if ed.Start > ed.End || ed.Start < 1 || ed.End < 1 || ed.End > len(ed.Lines) || ed.addr > len(ed.Lines) {
 		return ErrInvalidAddress
 	}
 	return nil
@@ -457,9 +457,7 @@ func (ed *Editor) Undo() (err error) {
 // The start, end and dot index values are printed to standard output.
 // The internal address value and the address counter is also printed.
 func (ed *Editor) dump() {
-	fmt.Printf("start=%d | end=%d | dot=%d | addr=%d | addrcount=%d | ",
-		ed.Start, ed.End, ed.Dot, ed.addr, ed.addrCount)
-	fmt.Printf("offset=%d | eof=%t | token='%c' | ",
-		ed.s.Pos().Offset, ed.tok == scanner.EOF, ed.tok)
+	fmt.Printf("start=%d | end=%d | dot=%d | addr=%d | addrcount=%d | ", ed.Start, ed.End, ed.Dot, ed.addr, ed.addrCount)
+	fmt.Printf("offset=%d | eof=%t | token='%c' | ", ed.s.Pos().Offset, ed.tok == scanner.EOF, ed.tok)
 	fmt.Printf("buffer_len=%d\n", len(ed.Lines))
 }
