@@ -6,9 +6,7 @@ import (
 	"unicode"
 )
 
-// nextAddress attempts to extract the next valid address. It navigates
-// through the user input, identifying and returning the next address
-// based on predefined criteria, for more info see the ed(1) man page.
+// nextAddress attempts to extract the next valid address.
 func (ed *Editor) nextAddress() (int, error) {
 	ed.addr = ed.Dot
 	var mod rune
@@ -35,10 +33,9 @@ func (ed *Editor) nextAddress() (int, error) {
 			if !first {
 				return 0, ErrInvalidAddress
 			}
+			ed.addr = len(ed.Lines)
 			if ed.tok == '.' {
 				ed.addr = ed.Dot
-			} else {
-				ed.addr = len(ed.Lines)
 			}
 			ed.tok = ed.s.Scan()
 		case ed.tok == '?':
@@ -54,14 +51,13 @@ func (ed *Editor) nextAddress() (int, error) {
 				ed.tok = ed.s.Scan()
 			}
 			if search == "" {
+				search = ed.search
 				if ed.search == "" {
 					return 0, ErrNoPrevPattern
 				}
-				search = ed.search
 			}
 			ed.search = search
-			var s int = 0 // ed.End - 1
-			var e = len(ed.Lines)
+			var s, e int = 0, len(ed.Lines)
 			if mod == '?' {
 				s = ed.End - 1
 				e = 0
