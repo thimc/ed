@@ -578,13 +578,16 @@ func (ed *Editor) DoCommand() (err error) {
 	case scanner.EOF:
 		if ed.s.Pos().Offset == 0 {
 			ed.Dot++
+			if ed.Dot >= len(ed.Lines) {
+				ed.Dot = len(ed.Lines)
+				err = ErrInvalidAddress
+			}
+			ed.Start = ed.Dot
+			ed.End = ed.Dot
+			if err != nil {
+				return err
+			}
 		}
-		if ed.Dot >= len(ed.Lines) {
-			ed.Dot = len(ed.Lines)
-			return ErrInvalidAddress
-		}
-		ed.Start = ed.Dot
-		ed.End = ed.Dot
 		if ed.End-1 < 0 {
 			return ErrInvalidAddress
 		}
