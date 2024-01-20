@@ -303,17 +303,31 @@ func (ed *Editor) DoCommand() (err error) {
 	case 'n':
 		fallthrough
 	case 'p':
+		var numbers, unambiguous bool
+	check:
+		for {
+			switch ed.tok {
+			case 'n':
+				numbers = true
+				ed.tok = ed.s.Scan()
+			case 'l':
+				unambiguous = true
+				ed.tok = ed.s.Scan()
+			default:
+				break check
+			}
+		}
 		for i := ed.Start - 1; i < ed.End; i++ {
 			if i < 0 {
 				continue
 			}
-			switch ed.tok {
-			case 'l':
-				var q string = strconv.QuoteToASCII(ed.Lines[i])
+			if numbers {
+				fmt.Fprintf(ed.out, "%d\t", i+1)
+			}
+			if unambiguous {
+				var q = strconv.QuoteToASCII(ed.Lines[i])
 				fmt.Fprintf(ed.out, "%s$\n", q[1:len(q)-1])
-			case 'n':
-				fmt.Fprintf(ed.out, "%d\t%s\n", i+1, ed.Lines[i])
-			case 'p':
+			} else {
 				fmt.Fprintf(ed.out, "%s\n", ed.Lines[i])
 			}
 		}
@@ -562,19 +576,17 @@ func (ed *Editor) DoCommand() (err error) {
 	case scanner.EOF:
 		if ed.s.Pos().Offset == 0 {
 			ed.Dot++
-			if ed.Dot >= len(ed.Lines) {
-				ed.Dot = len(ed.Lines)
-				err = ErrInvalidAddress
-			}
-			ed.Start = ed.Dot
-			ed.End = ed.Dot
 		}
-		if err == nil {
-			if ed.End-1 < 0 {
-				return ErrInvalidAddress
-			}
-			fmt.Fprintf(ed.out, "%s\n", ed.Lines[ed.End-1])
+		if ed.Dot >= len(ed.Lines) {
+			ed.Dot = len(ed.Lines)
+			return ErrInvalidAddress
 		}
+		ed.Start = ed.Dot
+		ed.End = ed.Dot
+		if ed.End-1 < 0 {
+			return ErrInvalidAddress
+		}
+		fmt.Fprintf(ed.out, "%s\n", ed.Lines[ed.End-1])
 		return err
 	default:
 		return ErrUnknownCmd
