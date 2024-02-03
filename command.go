@@ -383,8 +383,9 @@ func (ed *Editor) DoCommand() (err error) {
 			}
 			search = ed.search
 			repl = ed.replacestr
+		} else {
+			search = ed.scanStringUntil('/')
 		}
-		search = ed.scanStringUntil('/')
 		ed.tok = ed.s.Scan()
 		if ed.tok != scanner.EOF {
 			repl = ed.scanStringUntil('/')
@@ -439,6 +440,7 @@ func (ed *Editor) DoCommand() (err error) {
 						if ctok != '\\' && cs.Peek() == '&' {
 							prepl += string(ctok)
 							ctok = cs.Scan()
+							_ = ctok
 							ctok = cs.Scan()
 							prepl += s
 							continue
@@ -513,7 +515,6 @@ func (ed *Editor) DoCommand() (err error) {
 				ed.tok = ed.s.Scan()
 				quit = true
 			}
-		} else {
 		}
 		if ed.tok == ' ' {
 			ed.tok = ed.s.Scan()

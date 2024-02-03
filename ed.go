@@ -309,10 +309,10 @@ func (ed *Editor) Shell(command string) ([]string, error) {
 	}
 	cmd := exec.Command("/bin/sh", "-c", parsed)
 	stdout, err := cmd.StdoutPipe()
-	defer stdout.Close()
 	if err := cmd.Start(); err != nil {
 		return output, err
 	}
+	defer stdout.Close()
 	if err != nil {
 		return output, err
 	}
@@ -338,7 +338,7 @@ func (ed *Editor) ReadInsert() (string, error) {
 	var b []byte = make([]byte, 1)
 	for {
 		if ed.sigint {
-			return "", fmt.Errorf("Canceled by SIGINT")
+			return "", fmt.Errorf("canceled by SIGINT")
 		}
 		if _, err := ed.in.Read(b); err != nil {
 			return buf.String(), err
@@ -439,7 +439,6 @@ func (ed *Editor) Undo() (err error) {
 			ed.Lines = append(ed.Lines[:op.start-1], append(op.lines, ed.Lines[op.end:]...)...)
 		}
 		if op.d > 0 {
-			e = op.d
 			op.end = op.d
 		}
 		if op.end > len(ed.Lines) {
@@ -456,8 +455,8 @@ func (ed *Editor) Undo() (err error) {
 // dump is a helper function that is used to print the state of the program.
 // The start, end and dot index values are printed to standard output.
 // The internal address value and the address counter is also printed.
-func (ed *Editor) dump() {
-	fmt.Printf("start=%d | end=%d | dot=%d | addr=%d | addrcount=%d | ", ed.Start, ed.End, ed.Dot, ed.addr, ed.addrCount)
-	fmt.Printf("offset=%d | eof=%t | token='%c' | ", ed.s.Pos().Offset, ed.tok == scanner.EOF, ed.tok)
-	fmt.Printf("buffer_len=%d\n", len(ed.Lines))
-}
+// func (ed *Editor) dump() {
+// 	fmt.Printf("start=%d | end=%d | dot=%d | addr=%d | addrcount=%d | ", ed.Start, ed.End, ed.Dot, ed.addr, ed.addrCount)
+// 	fmt.Printf("offset=%d | eof=%t | token='%c' | ", ed.s.Pos().Offset, ed.tok == scanner.EOF, ed.tok)
+// 	fmt.Printf("buffer_len=%d\n", len(ed.Lines))
+// }

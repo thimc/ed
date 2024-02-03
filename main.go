@@ -7,7 +7,6 @@ import (
 )
 
 var (
-	debugFlag    = flag.Bool("d", false, "toggles debug information")
 	promptFlag   = flag.String("p", "", "prompt")
 	suppressFlag = flag.Bool("s", false, "suppress diagnostics")
 )
