@@ -51,7 +51,7 @@ func (ed *Editor) nextAddress() (int, error) {
 			ed.search = search
 			var s, e = 0, len(ed.Lines)
 			if mod == '?' {
-				s = ed.end - 2
+				s = ed.start - 2
 				e = 0
 			}
 			for i := s; i != e; {

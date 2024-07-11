@@ -97,26 +97,32 @@ func (ed *Editor) doCommand() (err error) {
 
 func (ed *Editor) cmdAppend(action *[]undoAction) error {
 	r := bufio.NewReader(ed.in)
+loop:
 	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			ed.setupSignals()
-			break
+		select {
+		case <-ed.sigintch:
+			fmt.Fprintln(ed.err, ErrDefault)
+			break loop
+		default:
+			line, err := r.ReadString('\n')
+			if err != nil {
+				break loop
+			}
+			line = line[:len(line)-1]
+			if line == "." {
+				break loop
+			}
+			if len(ed.Lines) == ed.end {
+				ed.Lines = append(ed.Lines, line)
+			} else {
+				ed.Lines = append(ed.Lines[:ed.end], append([]string{line}, ed.Lines[ed.end:]...)...)
+			}
+			ed.end++
+			*action = append(*action, undoAction{typ: undoDelete, start: ed.end - 1, end: ed.end})
+			ed.start = ed.end
+			ed.dot = ed.end
+			ed.dirty = true
 		}
-		line = line[:len(line)-1]
-		if line == "." {
-			break
-		}
-		if len(ed.Lines) == ed.end {
-			ed.Lines = append(ed.Lines, line)
-		} else {
-			ed.Lines = append(ed.Lines[:ed.end], append([]string{line}, ed.Lines[ed.end:]...)...)
-		}
-		ed.end++
-		*action = append(*action, undoAction{typ: undoDelete, start: ed.end - 1, end: ed.end})
-		ed.start = ed.end
-		ed.dot = ed.end
-		ed.dirty = true
 	}
 	return nil
 }
@@ -129,26 +135,32 @@ func (ed *Editor) cmdChange(undolines []string, action *[]undoAction) error {
 
 	ed.end = ed.start - 1
 	r := bufio.NewReader(ed.in)
+loop:
 	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			ed.setupSignals()
-			break
+		select {
+		case <-ed.sigintch:
+			fmt.Fprintln(ed.err, ErrDefault)
+			break loop
+		default:
+			line, err := r.ReadString('\n')
+			if err != nil {
+				break loop
+			}
+			line = line[:len(line)-1]
+			if line == "." {
+				break loop
+			}
+			if ed.end > len(ed.Lines) {
+				ed.Lines = append(ed.Lines[:ed.end], line)
+			} else {
+				ed.Lines = append(ed.Lines[:ed.end], append([]string{line}, ed.Lines[ed.end:]...)...)
+			}
+			ed.end++
+			*action = append(*action, undoAction{typ: undoDelete, start: ed.end - 1, end: ed.end})
+			ed.start = ed.end
+			ed.dot = ed.end
+			ed.dirty = true
 		}
-		line = line[:len(line)-1]
-		if line == "." {
-			break
-		}
-		if ed.end > len(ed.Lines) {
-			ed.Lines = append(ed.Lines[:ed.end], line)
-		} else {
-			ed.Lines = append(ed.Lines[:ed.end], append([]string{line}, ed.Lines[ed.end:]...)...)
-		}
-		ed.end++
-		*action = append(*action, undoAction{typ: undoDelete, start: ed.end - 1, end: ed.end})
-		ed.start = ed.end
-		ed.dot = ed.end
-		ed.dirty = true
 	}
 	return nil
 }
@@ -254,17 +266,26 @@ func (ed *Editor) cmdGlobal(interactive, inverted bool) error {
 		if interactive {
 			fmt.Fprintln(ed.out, ed.Lines[idx])
 			r := bufio.NewReader(ed.in)
-			line, err := r.ReadString('\n')
-			line = line[:len(line)-1]
-			if err != nil {
-				return err
-			}
-			cmd = line
-			switch cmd {
-			case "":
-				continue
-			case "&":
-				cmd = ed.globalCmd
+		loop:
+			for {
+				select {
+				case <-ed.sigintch:
+					fmt.Fprintln(ed.err, ErrDefault)
+					break loop
+				default:
+					line, err := r.ReadString('\n')
+					line = line[:len(line)-1]
+					if err != nil {
+						return err
+					}
+					cmd = line
+					switch cmd {
+					case "":
+						continue
+					case "&":
+						cmd = ed.globalCmd
+					}
+				}
 			}
 		}
 		ed.readInput(strings.NewReader(cmd))
@@ -294,28 +315,34 @@ func (ed *Editor) cmdExplainError() error {
 func (ed *Editor) cmdInsert(action *[]undoAction) error {
 	d := ed.end
 	r := bufio.NewReader(ed.in)
+loop:
 	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			ed.setupSignals()
-			break
-		}
-		line = line[:len(line)-1]
-		if line == "." {
-			break
-		}
-		if ed.end-1 < 0 {
+		select {
+		case <-ed.sigintch:
+			fmt.Fprintln(ed.err, ErrDefault)
+			break loop
+		default:
+			line, err := r.ReadString('\n')
+			if err != nil {
+				break loop
+			}
+			line = line[:len(line)-1]
+			if line == "." {
+				break loop
+			}
+			if ed.end-1 < 0 {
+				ed.end++
+			}
+			if ed.end > len(ed.Lines) {
+				ed.Lines = append(ed.Lines, line)
+			} else {
+				ed.Lines = append(ed.Lines[:ed.end], ed.Lines[ed.end-1:]...)
+				ed.Lines[ed.end-1] = line
+			}
+			ed.dirty = true
+			*action = append(*action, undoAction{typ: undoDelete, start: ed.end - 1, end: ed.end, d: d})
 			ed.end++
 		}
-		if ed.end > len(ed.Lines) {
-			ed.Lines = append(ed.Lines, line)
-		} else {
-			ed.Lines = append(ed.Lines[:ed.end], ed.Lines[ed.end-1:]...)
-			ed.Lines[ed.end-1] = line
-		}
-		ed.dirty = true
-		*action = append(*action, undoAction{typ: undoDelete, start: ed.end - 1, end: ed.end, d: d})
-		ed.end++
 	}
 	ed.end--
 	ed.start = ed.end

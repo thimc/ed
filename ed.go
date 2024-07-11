@@ -89,11 +89,11 @@ type Editor struct {
 	globalCmd   string          // previous command used by g, G, v and V
 	printErrors bool            // toggle errors
 	silent      bool            // chatty
-	sigch       chan os.Signal  // signals caught by ed
-	sigint      bool            // if sigint was caught
-	in          io.Reader       // standard input
-	out         io.Writer       // standard output
-	err         io.Writer       // standard error
+	sighupch    chan os.Signal
+	sigintch    chan os.Signal
+	in          io.Reader // standard input
+	out         io.Writer // standard output
+	err         io.Writer // standard error
 }
 
 // New creates a new instance of the Ed editor. It defaults to reading
@@ -102,15 +102,16 @@ type Editor struct {
 // created.
 func New(opts ...OptionFunc) *Editor {
 	ed := &Editor{
-		sigch: make(chan os.Signal, 1),
-		in:    os.Stdin,
-		out:   os.Stdout,
-		err:   os.Stderr,
+		sigintch: make(chan os.Signal, 1),
+		sighupch: make(chan os.Signal, 1),
+		in:       os.Stdin,
+		out:      os.Stdout,
+		err:      os.Stderr,
 	}
 	for _, opt := range opts {
 		opt(ed)
 	}
-	ed.setupSignals()
+	go ed.setupSignals()
 	return ed
 }
 
@@ -204,22 +205,13 @@ func (ed *Editor) readInput(r io.Reader) error {
 
 // setupSignals sets up signal handlers for SIGHUP and SIGINT.
 func (ed *Editor) setupSignals() {
-	ed.sigint = false
-	signal.Notify(ed.sigch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
-	go func() {
-		sig := <-ed.sigch
-		switch sig {
-		case syscall.SIGHUP:
-			if ed.dirty {
-				ed.writeFile(1, len(ed.Lines), DefaultHangupFile)
-			}
-		case syscall.SIGINT:
-			fmt.Fprintln(ed.err, ErrDefault)
-			ed.sigint = true
-		case syscall.SIGQUIT:
-			// ignore
+	signal.Notify(ed.sigintch, syscall.SIGINT, os.Interrupt)
+	signal.Notify(ed.sighupch, syscall.SIGHUP, syscall.SIGQUIT)
+	for range ed.sighupch {
+		if ed.dirty {
+			ed.writeFile(1, len(ed.Lines), DefaultHangupFile)
 		}
-	}()
+	}
 }
 
 // readFile checks if the 'path' starts with a '!' and if so executes
