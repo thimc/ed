@@ -29,7 +29,7 @@ const (
 	undoDelete
 )
 
-type undoOperation struct {
+type undoAction struct {
 	typ   undoType
 	start int
 	end   int
@@ -63,36 +63,36 @@ var (
 )
 
 type Editor struct {
-	path        string            // file path
-	dirty       bool              // modified
-	Lines       []string          // File buffer
-	mark        [25]int           // a to z
-	dot         int               // current position
-	start       int               // start position
-	end         int               // end position
-	input       []byte            // user input
-	addrCount   int               // number of addresses in the current input
-	addr        int               // internal address
-	s           scanner.Scanner   // token scanner for the input byte array
-	tok         rune              // current token
-	undohist    [][]undoOperation // undo history
-	globalUndo  []undoOperation   // undo actions caught during global cmds
-	g           bool              // global command state
-	error       error             // previous error
-	scroll      int               // previous scroll value
-	search      string            // previous search criteria for /, ? or s
-	replacestr  string            // previous s replacement
-	showPrompt  bool              // toggle for displaying the prompt
-	prompt      string            // user prompt
-	shellCmd    string            // previous command for !
-	globalCmd   string            // previous command used by g, G, v and V
-	printErrors bool              // toggle errors
-	silent      bool              // chatty
-	sigch       chan os.Signal    // signals caught by ed
-	sigint      bool              // if sigint was caught
-	in          io.Reader         // standard input
-	out         io.Writer         // standard output
-	err         io.Writer         // standard error
+	path        string          // file path
+	dirty       bool            // modified
+	Lines       []string        // File buffer
+	mark        [25]int         // a to z
+	dot         int             // current position
+	start       int             // start position
+	end         int             // end position
+	input       []byte          // user input
+	addrCount   int             // number of addresses in the current input
+	addr        int             // internal address
+	s           scanner.Scanner // token scanner for the input byte array
+	tok         rune            // current token
+	undohist    [][]undoAction  // undo history
+	globalUndo  []undoAction    // undo actions caught during global cmds
+	g           bool            // global command state
+	error       error           // previous error
+	scroll      int             // previous scroll value
+	search      string          // previous search criteria for /, ? or s
+	replacestr  string          // previous s replacement
+	showPrompt  bool            // toggle for displaying the prompt
+	prompt      string          // user prompt
+	shellCmd    string          // previous command for !
+	globalCmd   string          // previous command used by g, G, v and V
+	printErrors bool            // toggle errors
+	silent      bool            // chatty
+	sigch       chan os.Signal  // signals caught by ed
+	sigint      bool            // if sigint was caught
+	in          io.Reader       // standard input
+	out         io.Writer       // standard output
+	err         io.Writer       // standard error
 }
 
 // New creates a new instance of the Ed editor. It defaults to reading
@@ -204,7 +204,7 @@ func (ed *Editor) readInput(r io.Reader) error {
 // setupSignals sets up signal handlers for SIGHUP and SIGINT.
 func (ed *Editor) setupSignals() {
 	ed.sigint = false
-	signal.Notify(ed.sigch, syscall.SIGHUP, syscall.SIGINT)
+	signal.Notify(ed.sigch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
 	go func() {
 		sig := <-ed.sigch
 		switch sig {
@@ -215,6 +215,8 @@ func (ed *Editor) setupSignals() {
 		case syscall.SIGINT:
 			fmt.Fprintln(ed.err, ErrDefault)
 			ed.sigint = true
+		case syscall.SIGQUIT:
+			// ignore
 		}
 	}()
 }

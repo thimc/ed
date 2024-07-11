@@ -16,22 +16,14 @@ func (ed *Editor) nextAddress() (int, error) {
 	for first = true; ; first = false {
 		for {
 			switch ed.tok {
-			case ' ':
-				fallthrough
-			case '\t':
-				fallthrough
-			case '\n':
-				fallthrough
-			case '\r':
+			case ' ', '\t', '\n', '\r':
 				ed.tok = ed.s.Scan()
 				continue
 			}
 			break
 		}
 		switch {
-		case ed.tok == '.':
-			fallthrough
-		case ed.tok == '$':
+		case ed.tok == '.', ed.tok == '$':
 			if !first {
 				return 0, ErrInvalidAddress
 			}
@@ -40,9 +32,7 @@ func (ed *Editor) nextAddress() (int, error) {
 				ed.addr = ed.dot
 			}
 			ed.tok = ed.s.Scan()
-		case ed.tok == '?':
-			fallthrough
-		case ed.tok == '/':
+		case ed.tok == '?', ed.tok == '/':
 			if !first {
 				return 0, ErrInvalidAddress
 			}
@@ -102,11 +92,7 @@ func (ed *Editor) nextAddress() (int, error) {
 				return 0, ErrInvalidAddress
 			}
 			ed.addr = maddr
-		case ed.tok == '+':
-			fallthrough
-		case ed.tok == '-':
-			fallthrough
-		case ed.tok == '^':
+		case ed.tok == '+', ed.tok == '-', ed.tok == '^':
 			mod = ed.tok
 			ed.tok = ed.s.Scan()
 			if !unicode.IsDigit(ed.tok) {
@@ -136,11 +122,7 @@ func (ed *Editor) nextAddress() (int, error) {
 					ed.addr = n
 				}
 			}
-		case ed.tok == ';':
-			fallthrough
-		case ed.tok == '%':
-			fallthrough
-		case ed.tok == ',':
+		case ed.tok == ';', ed.tok == '%', ed.tok == ',':
 			var r = ed.tok
 			if first {
 				ed.tok = ed.s.Scan()
