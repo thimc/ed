@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"regexp"
@@ -23,9 +24,6 @@ func (ed *Editor) doCommand() (err error) {
 			} else {
 				ed.globalUndo = append(ed.globalUndo, action...)
 			}
-		}
-		if err != nil {
-			ed.error = err
 		}
 	}()
 	switch ed.tok {
@@ -98,12 +96,14 @@ func (ed *Editor) doCommand() (err error) {
 }
 
 func (ed *Editor) cmdAppend(action *[]undoAction) error {
+	r := bufio.NewReader(ed.in)
 	for {
-		line, err := ed.readInsert()
+		line, err := r.ReadString('\n')
 		if err != nil {
 			ed.setupSignals()
 			break
 		}
+		line = line[:len(line)-1]
 		if line == "." {
 			break
 		}
@@ -128,12 +128,14 @@ func (ed *Editor) cmdChange(undolines []string, action *[]undoAction) error {
 	ed.Lines = append(ed.Lines[:ed.start-1], ed.Lines[ed.end:]...)
 
 	ed.end = ed.start - 1
+	r := bufio.NewReader(ed.in)
 	for {
-		line, err := ed.readInsert()
+		line, err := r.ReadString('\n')
 		if err != nil {
 			ed.setupSignals()
 			break
 		}
+		line = line[:len(line)-1]
 		if line == "." {
 			break
 		}
@@ -183,15 +185,19 @@ func (ed *Editor) cmdEdit(unconditionally bool) error {
 }
 
 func (ed *Editor) cmdFilename() error {
-	ed.tok = ed.s.Scan()
-	if ed.tok == scanner.EOF {
+	if ed.s.Pos().Offset != 1 {
+		return ErrUnexpectedAddress
+	}
+	if ed.tok = ed.s.Scan(); ed.tok == scanner.EOF {
 		if ed.path == "" {
 			return ErrNoFileName
 		}
 		fmt.Fprintln(ed.err, ed.path)
 		return nil
 	}
-	ed.tok = ed.s.Scan()
+	if ed.tok = ed.s.Scan(); ed.tok == '!' {
+		return ErrInvalidRedirection
+	}
 	var fname = ed.scanString()
 	if fname == "" {
 		return ErrNoFileName
@@ -247,7 +253,9 @@ func (ed *Editor) cmdGlobal(interactive, inverted bool) error {
 		ed.dot = ed.end
 		if interactive {
 			fmt.Fprintln(ed.out, ed.Lines[idx])
-			line, err := ed.readInsert()
+			r := bufio.NewReader(ed.in)
+			line, err := r.ReadString('\n')
+			line = line[:len(line)-1]
 			if err != nil {
 				return err
 			}
@@ -280,17 +288,19 @@ func (ed *Editor) cmdExplainError() error {
 	if ed.error != nil {
 		fmt.Fprintln(ed.err, ed.error)
 	}
-	return nil
+	return ed.error
 }
 
 func (ed *Editor) cmdInsert(action *[]undoAction) error {
 	d := ed.end
+	r := bufio.NewReader(ed.in)
 	for {
-		line, err := ed.readInsert()
+		line, err := r.ReadString('\n')
 		if err != nil {
 			ed.setupSignals()
 			break
 		}
+		line = line[:len(line)-1]
 		if line == "." {
 			break
 		}
@@ -417,7 +427,7 @@ check:
 func (ed *Editor) cmdTogglePrompt() error {
 	ed.showPrompt = !ed.showPrompt
 	if ed.prompt == "" {
-		ed.prompt = defaultPrompt
+		ed.prompt = DefaultPrompt
 	}
 	return nil
 }

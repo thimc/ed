@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	defaultPrompt     = "*"
-	defaultHangupFile = "ed.hup"
-	defaultShell      = "/bin/sh"
+	DefaultPrompt     = "*"
+	DefaultHangupFile = "ed.hup"
+	DefaultShell      = "/bin/sh"
 )
 
 type undoType int
@@ -49,6 +49,7 @@ var (
 	ErrInvalidDestination  = errors.New("invalid destination")
 	ErrInvalidMark         = errors.New("invalid mark character")
 	ErrInvalidNumber       = errors.New("number out of range")
+	ErrInvalidRedirection  = errors.New("invalid redirection")
 	ErrInvalidPatternDelim = errors.New("invalid pattern delimiter")
 	ErrNoCmd               = errors.New("no command")
 	ErrNoFileName          = errors.New("no current filename")
@@ -210,7 +211,7 @@ func (ed *Editor) setupSignals() {
 		switch sig {
 		case syscall.SIGHUP:
 			if ed.dirty {
-				ed.writeFile(1, len(ed.Lines), defaultHangupFile)
+				ed.writeFile(1, len(ed.Lines), DefaultHangupFile)
 			}
 		case syscall.SIGINT:
 			fmt.Fprintln(ed.err, ErrDefault)
@@ -365,7 +366,7 @@ func (ed *Editor) shell(command string) ([]string, error) {
 		}
 		ctok = cs.Scan()
 	}
-	cmd := exec.Command(defaultShell, "-c", parsed)
+	cmd := exec.Command(DefaultShell, "-c", parsed)
 	stdout, err := cmd.StdoutPipe()
 	if err := cmd.Start(); err != nil {
 		return output, err
@@ -387,28 +388,6 @@ func (ed *Editor) shell(command string) ([]string, error) {
 	}
 	ed.shellCmd = command
 	return output, err
-}
-
-// readInsert will read from `stdin` until it encounters a
-// newline (\n) or is interrupted by SIGINT.
-func (ed *Editor) readInsert() (string, error) {
-	var buf bytes.Buffer
-	var b []byte = make([]byte, 1)
-	for {
-		if ed.sigint {
-			return "", fmt.Errorf("canceled by SIGINT")
-		}
-		if _, err := ed.in.Read(b); err != nil {
-			return buf.String(), err
-		}
-		if b[0] == '\n' {
-			break
-		}
-		if err := buf.WriteByte(b[0]); err != nil {
-			return buf.String(), err
-		}
-	}
-	return buf.String(), nil
 }
 
 // scanString will advance the tokenizer, scanning the input buffer
@@ -499,17 +478,19 @@ func (ed *Editor) Do() error {
 	if err := ed.readInput(ed.in); err != nil {
 		return err
 	}
-	if ed.error = ed.parseRange(); ed.error != nil {
-		if ed.printErrors {
-			return ed.error
+	if err := ed.parseRange(); err != nil {
+		ed.error = err
+		if !ed.printErrors {
+			return ErrDefault
 		}
-		return ErrDefault
+		return err
 	}
-	if ed.error = ed.doCommand(); ed.error != nil {
-		if ed.printErrors {
-			return ed.error
+	if err := ed.doCommand(); err != nil {
+		ed.error = err
+		if !ed.printErrors {
+			return ErrDefault
 		}
-		return ErrDefault
+		return err
 	}
 	return nil
 }
