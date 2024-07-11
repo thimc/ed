@@ -128,6 +128,7 @@ func TestRange(t *testing.T) {
 	}
 }
 
+// helper function that sets up a buffer in memory
 func (ed *Editor) setupTestFile(buf []string) {
 	ed.Lines = buf
 	ed.path = "test"
@@ -145,17 +146,18 @@ func (ed *Editor) removeDummyFile(fname string) {
 	}
 }
 
-func (ed *Editor) createDummyFile(fname string) {
+func (ed *Editor) createDummyFile(fname string) error {
 	ed.removeDummyFile(fname)
 	file, err := os.Create(fname)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer file.Close()
 	for _, ln := range dummyFile {
 		_, err := file.WriteString(ln+"\n")
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }
