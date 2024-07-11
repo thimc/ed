@@ -10,26 +10,26 @@ import (
 	"unicode"
 )
 
-// DoCommand executes a command on a range defined by start and end.
-func (ed *Editor) DoCommand() (err error) {
+// doCommand executes a command on a range defined by start and end.
+func (ed *Editor) doCommand() (err error) {
 	var ul []string
-	var uo []undoOp
+	var uo []undoOperation
 	defer func() {
 		if len(uo) > 0 {
 			if !ed.g {
-				ed.undo = append(ed.undo, uo)
+				ed.undohist = append(ed.undohist, uo)
 			} else {
 				ed.globalUndo = append(ed.globalUndo, uo...)
 			}
 		}
 		if err != nil {
-			ed.Error = err
+			ed.error = err
 		}
 	}()
 	switch ed.tok {
 	case 'a':
 		for {
-			line, err := ed.ReadInsert()
+			line, err := ed.readInsert()
 			if err != nil {
 				ed.setupSignals()
 				break
@@ -37,26 +37,26 @@ func (ed *Editor) DoCommand() (err error) {
 			if line == "." {
 				break
 			}
-			if len(ed.Lines) == ed.End {
+			if len(ed.Lines) == ed.end {
 				ed.Lines = append(ed.Lines, line)
 			} else {
-				ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
+				ed.Lines = append(ed.Lines[:ed.end], append([]string{line}, ed.Lines[ed.end:]...)...)
 			}
-			ed.End++
-			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End})
-			ed.Start = ed.End
-			ed.Dot = ed.End
-			ed.Dirty = true
+			ed.end++
+			uo = append(uo, undoOperation{typ: undoDelete, start: ed.end - 1, end: ed.end})
+			ed.start = ed.end
+			ed.dot = ed.end
+			ed.dirty = true
 		}
 		return nil
 	case 'c':
-		ul = make([]string, ed.End-ed.Start+1)
-		copy(ul, ed.Lines[ed.Start-1:ed.End])
-		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.Start + len(ul) - 1, lines: ul})
-		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
-		ed.End = ed.Start - 1
+		ul = make([]string, ed.end-ed.start+1)
+		copy(ul, ed.Lines[ed.start-1:ed.end])
+		uo = append(uo, undoOperation{typ: undoAdd, start: ed.start, end: ed.start - 1, d: ed.start + len(ul) - 1, lines: ul})
+		ed.Lines = append(ed.Lines[:ed.start-1], ed.Lines[ed.end:]...)
+		ed.end = ed.start - 1
 		for {
-			line, err := ed.ReadInsert()
+			line, err := ed.readInsert()
 			if err != nil {
 				ed.setupSignals()
 				break
@@ -64,43 +64,43 @@ func (ed *Editor) DoCommand() (err error) {
 			if line == "." {
 				break
 			}
-			if ed.End > len(ed.Lines) {
-				ed.Lines = append(ed.Lines[:ed.End], line)
+			if ed.end > len(ed.Lines) {
+				ed.Lines = append(ed.Lines[:ed.end], line)
 			} else {
-				ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
+				ed.Lines = append(ed.Lines[:ed.end], append([]string{line}, ed.Lines[ed.end:]...)...)
 			}
-			ed.End++
-			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End})
-			ed.Start = ed.End
-			ed.Dot = ed.End
-			ed.Dirty = true
+			ed.end++
+			uo = append(uo, undoOperation{typ: undoDelete, start: ed.end - 1, end: ed.end})
+			ed.start = ed.end
+			ed.dot = ed.end
+			ed.dirty = true
 		}
 		return nil
 	case 'd':
-		ul = make([]string, ed.End-ed.Start+1)
-		copy(ul, ed.Lines[ed.Start-1:ed.End])
-		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.End + len(ul) - 1, lines: ul})
-		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
-		if ed.Start > len(ed.Lines) {
-			ed.Start = len(ed.Lines)
+		ul = make([]string, ed.end-ed.start+1)
+		copy(ul, ed.Lines[ed.start-1:ed.end])
+		uo = append(uo, undoOperation{typ: undoAdd, start: ed.start, end: ed.start - 1, d: ed.end + len(ul) - 1, lines: ul})
+		ed.Lines = append(ed.Lines[:ed.start-1], ed.Lines[ed.end:]...)
+		if ed.start > len(ed.Lines) {
+			ed.start = len(ed.Lines)
 		}
-		ed.End = ed.Start
-		ed.Dot = ed.Start
-		ed.Dirty = true
+		ed.end = ed.start
+		ed.dot = ed.start
+		ed.dirty = true
 		return nil
 	case 'E':
 		fallthrough
 	case 'e':
-		var uc bool = (ed.tok == 'E')
+		var uc = (ed.tok == 'E')
 		ed.tok = ed.s.Scan()
 		ed.skipWhitespace()
-		var fname string = ed.scanString()
-		if !uc && ed.Dirty {
-			ed.Dirty = false
+		var fname = ed.scanString()
+		if !uc && ed.dirty {
+			ed.dirty = false
 			return ErrFileModified
 		}
 		var lines []string
-		lines, err = ed.ReadFile(fname, true, true)
+		lines, err = ed.readFile(fname, true, true)
 		if err != nil {
 			return err
 		}
@@ -109,19 +109,19 @@ func (ed *Editor) DoCommand() (err error) {
 	case 'f':
 		ed.tok = ed.s.Scan()
 		if ed.tok == scanner.EOF {
-			if ed.Path == "" {
+			if ed.path == "" {
 				return ErrNoFileName
 			}
-			fmt.Fprintf(ed.err, "%s\n", ed.Path)
+			fmt.Fprintf(ed.err, "%s\n", ed.path)
 			return nil
 		}
 		ed.tok = ed.s.Scan()
-		var fname string = ed.scanString()
+		var fname = ed.scanString()
 		if fname == "" {
 			return ErrNoFileName
 		}
-		ed.Path = fname
-		fmt.Fprintf(ed.err, "%s\n", ed.Path)
+		ed.path = fname
+		fmt.Fprintf(ed.err, "%s\n", ed.path)
 		return nil
 	case 'V':
 		fallthrough
@@ -133,24 +133,24 @@ func (ed *Editor) DoCommand() (err error) {
 		if ed.g {
 			return ErrCannotNestGlobal
 		}
-		var i bool = (ed.tok == 'G' || ed.tok == 'V')
-		var v bool = (ed.tok == 'v' || ed.tok == 'V')
+		var i = (ed.tok == 'G' || ed.tok == 'V')
+		var v = (ed.tok == 'v' || ed.tok == 'V')
 		if ed.s.Pos().Offset == 1 {
-			ed.Start = 1
-			ed.End = len(ed.Lines)
+			ed.start = 1
+			ed.end = len(ed.Lines)
 		}
 		ed.tok = ed.s.Scan()
-		var delim rune = ed.tok
+		var delim = ed.tok
 		ed.tok = ed.s.Scan()
 		if delim == ' ' || delim == scanner.EOF {
 			return ErrInvalidPatternDelim
 		}
-		var s, e int = ed.Start, ed.End
-		var search string = ed.scanStringUntil(delim)
+		var s, e = ed.start, ed.end
+		var search = ed.scanStringUntil(delim)
 		if ed.tok == delim {
 			ed.tok = ed.s.Scan()
 		}
-		var cmd string = ed.scanString()
+		var cmd = ed.scanString()
 		if cmd != "" {
 			if cmd[:len(cmd)-1] == string(delim) {
 				cmd = cmd[:len(cmd)-1]
@@ -159,11 +159,11 @@ func (ed *Editor) DoCommand() (err error) {
 		if cmd == "" && !i {
 			cmd = "p"
 		}
-		ed.globalUndo = []undoOp{}
+		ed.globalUndo = []undoOperation{}
 		ed.g = true
 		defer func() {
 			ed.g = false
-			ed.undo = append(ed.undo, ed.globalUndo)
+			ed.undohist = append(ed.undohist, ed.globalUndo)
 		}()
 		for idx := s - 1; idx < e; idx++ {
 			match, err := regexp.MatchString(search, ed.Lines[idx])
@@ -173,12 +173,12 @@ func (ed *Editor) DoCommand() (err error) {
 			if (!match && !v) || (v && match) {
 				continue
 			}
-			ed.Start = idx + 1
-			ed.End = ed.Start
-			ed.Dot = ed.End
+			ed.start = idx + 1
+			ed.end = ed.start
+			ed.dot = ed.end
 			if i {
 				fmt.Fprintf(ed.out, "%s\n", ed.Lines[idx])
-				line, err := ed.ReadInsert()
+				line, err := ed.readInsert()
 				if err != nil {
 					return err
 				}
@@ -190,8 +190,8 @@ func (ed *Editor) DoCommand() (err error) {
 					cmd = ed.globalCmd
 				}
 			}
-			ed.ReadInput(strings.NewReader(cmd))
-			if err := ed.DoCommand(); err != nil {
+			ed.readInput(strings.NewReader(cmd))
+			if err := ed.doCommand(); err != nil {
 				return err
 			}
 			if e > len(ed.Lines) {
@@ -204,14 +204,14 @@ func (ed *Editor) DoCommand() (err error) {
 		ed.printErrors = !ed.printErrors
 		return nil
 	case 'h':
-		if ed.Error != nil {
-			fmt.Fprintf(ed.err, "%s\n", ed.Error)
+		if ed.error != nil {
+			fmt.Fprintf(ed.err, "%s\n", ed.error)
 		}
 		return nil
 	case 'i':
-		d := ed.End
+		d := ed.end
 		for {
-			line, err := ed.ReadInsert()
+			line, err := ed.readInsert()
 			if err != nil {
 				ed.setupSignals()
 				break
@@ -219,40 +219,40 @@ func (ed *Editor) DoCommand() (err error) {
 			if line == "." {
 				break
 			}
-			if ed.End-1 < 0 {
-				ed.End++
+			if ed.end-1 < 0 {
+				ed.end++
 			}
-			if ed.End > len(ed.Lines) {
+			if ed.end > len(ed.Lines) {
 				ed.Lines = append(ed.Lines, line)
 			} else {
-				ed.Lines = append(ed.Lines[:ed.End], ed.Lines[ed.End-1:]...)
-				ed.Lines[ed.End-1] = line
+				ed.Lines = append(ed.Lines[:ed.end], ed.Lines[ed.end-1:]...)
+				ed.Lines[ed.end-1] = line
 			}
-			ed.Dirty = true
-			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End, d: d})
-			ed.End++
+			ed.dirty = true
+			uo = append(uo, undoOperation{typ: undoDelete, start: ed.end - 1, end: ed.end, d: d})
+			ed.end++
 		}
-		ed.End--
-		ed.Start = ed.End
-		ed.Dot = ed.End
+		ed.end--
+		ed.start = ed.end
+		ed.dot = ed.end
 		return nil
 	case 'j':
-		if ed.End == ed.Start {
-			ed.End++
+		if ed.end == ed.start {
+			ed.end++
 		}
-		if ed.End > len(ed.Lines) {
+		if ed.end > len(ed.Lines) {
 			return ErrInvalidAddress
 		}
-		ul = make([]string, ed.End-ed.Start+1)
-		copy(ul, ed.Lines[ed.Start-1:ed.End])
-		var joined string = strings.Join(ed.Lines[ed.Start-1:ed.End], "")
-		uo = append(uo, undoOp{action: undoAdd, start: ed.End - len(ul) + 1, end: ed.End - len(ul), d: ed.End + len(ul), lines: ul})
-		var result []string = append(append([]string{}, ed.Lines[:ed.Start-1]...), joined)
-		ed.Lines = append(result, ed.Lines[ed.End:]...)
-		uo = append(uo, undoOp{action: undoDelete, start: ed.Start - 1, end: ed.Start})
-		ed.End = ed.Start
-		ed.Dot = ed.Start
-		ed.Dirty = true
+		ul = make([]string, ed.end-ed.start+1)
+		copy(ul, ed.Lines[ed.start-1:ed.end])
+		var joined = strings.Join(ed.Lines[ed.start-1:ed.end], "")
+		uo = append(uo, undoOperation{typ: undoAdd, start: ed.end - len(ul) + 1, end: ed.end - len(ul), d: ed.end + len(ul), lines: ul})
+		var result []string = append(append([]string{}, ed.Lines[:ed.start-1]...), joined)
+		ed.Lines = append(result, ed.Lines[ed.end:]...)
+		uo = append(uo, undoOperation{typ: undoDelete, start: ed.start - 1, end: ed.start})
+		ed.end = ed.start
+		ed.dot = ed.start
+		ed.dirty = true
 		return nil
 	case 'k':
 		ed.tok = ed.s.Scan()
@@ -265,38 +265,38 @@ func (ed *Editor) DoCommand() (err error) {
 		if mark < 0 || mark > len(ed.mark) {
 			return ErrInvalidMark
 		}
-		ed.mark[mark] = ed.End
+		ed.mark[mark] = ed.end
 		return nil
 	case 'm':
 		var dst int
 		ed.tok = ed.s.Scan()
 		dst, err = ed.scanNumber()
 		if err != nil {
-			ed.Start = ed.Dot
-			ed.End = ed.Dot
+			ed.start = ed.dot
+			ed.end = ed.dot
 			return ErrInvalidCmdSuffix
 		}
 		if dst < 0 || dst > len(ed.Lines) {
 			return ErrDestinationExpected
 		}
-		if ed.Start <= dst && dst < ed.End {
+		if ed.start <= dst && dst < ed.end {
 			return ErrInvalidAddress
 		}
-		lines := make([]string, ed.End-ed.Start+1)
-		copy(lines, ed.Lines[ed.Start-1:ed.End])
-		uo = append(uo, undoOp{action: undoAdd, start: ed.Start, end: ed.Start - 1, d: ed.End + 1, lines: lines})
-		ed.Lines = append(ed.Lines[:ed.Start-1], ed.Lines[ed.End:]...)
+		lines := make([]string, ed.end-ed.start+1)
+		copy(lines, ed.Lines[ed.start-1:ed.end])
+		uo = append(uo, undoOperation{typ: undoAdd, start: ed.start, end: ed.start - 1, d: ed.end + 1, lines: lines})
+		ed.Lines = append(ed.Lines[:ed.start-1], ed.Lines[ed.end:]...)
 		if dst-len(lines) < 0 {
 			dst = len(lines) + dst
 		}
 		ed.Lines = append(ed.Lines[:dst-len(lines)], append(lines, ed.Lines[dst-len(lines):]...)...)
 		ul = make([]string, len(lines))
 		copy(ul, ed.Lines[dst-len(lines):dst])
-		uo = append(uo, undoOp{action: undoDelete, start: dst - len(lines), end: dst})
-		ed.End = dst
-		ed.Start = dst
-		ed.Dot = dst
-		ed.Dirty = true
+		uo = append(uo, undoOperation{typ: undoDelete, start: dst - len(lines), end: dst})
+		ed.end = dst
+		ed.start = dst
+		ed.dot = dst
+		ed.dirty = true
 		return nil
 	case 'l':
 		fallthrough
@@ -319,7 +319,7 @@ func (ed *Editor) DoCommand() (err error) {
 				break check
 			}
 		}
-		for i := ed.Start - 1; i < ed.End; i++ {
+		for i := ed.start - 1; i < ed.end; i++ {
 			if i < 0 {
 				continue
 			}
@@ -336,15 +336,15 @@ func (ed *Editor) DoCommand() (err error) {
 		return nil
 	case 'P':
 		ed.showPrompt = !ed.showPrompt
-		if ed.Prompt == "" {
-			ed.Prompt = defaultPrompt
+		if ed.prompt == "" {
+			ed.prompt = defaultPrompt
 		}
 		return nil
 	case 'q':
 		fallthrough
 	case 'Q':
-		if ed.tok == 'q' && ed.Dirty {
-			ed.Dirty = false
+		if ed.tok == 'q' && ed.dirty {
+			ed.dirty = false
 			return ErrFileModified
 		}
 		os.Exit(0)
@@ -352,9 +352,9 @@ func (ed *Editor) DoCommand() (err error) {
 	case 'r':
 		ed.tok = ed.s.Scan()
 		ed.skipWhitespace()
-		var fname string = ed.scanString()
+		var fname = ed.scanString()
 		var lines []string
-		lines, err = ed.ReadFile(fname, false, true)
+		lines, err = ed.readFile(fname, false, true)
 		if err != nil {
 			return err
 		}
@@ -362,20 +362,22 @@ func (ed *Editor) DoCommand() (err error) {
 			if len(ed.Lines) < len(lines) {
 				ed.Lines = append(ed.Lines, line)
 			} else {
-				ed.Lines = append(ed.Lines[:ed.End], append([]string{line}, ed.Lines[ed.End:]...)...)
+				ed.Lines = append(ed.Lines[:ed.end], append([]string{line}, ed.Lines[ed.end:]...)...)
 			}
-			ed.Dirty = true
-			ed.End++
-			uo = append(uo, undoOp{action: undoDelete, start: ed.End - 1, end: ed.End})
+			ed.dirty = true
+			ed.end++
+			uo = append(uo, undoOperation{typ: undoDelete, start: ed.end - 1, end: ed.end})
 		}
-		ed.Start = ed.End
-		ed.Dot = ed.End
+		ed.start = ed.end
+		ed.dot = ed.end
 		return nil
 	case 's':
 		ed.tok = ed.s.Scan()
-		var search, repl string
-		var mod rune
-		var re *regexp.Regexp
+		var (
+			search, repl string
+			mod          rune
+			re           *regexp.Regexp
+		)
 		ed.tok = ed.s.Scan()
 		if ed.tok == scanner.EOF {
 			if ed.search == "" && ed.replacestr == "" {
@@ -412,11 +414,13 @@ func (ed *Editor) DoCommand() (err error) {
 			n = num
 			N = num
 		}
-		var match bool
-		var s int = ed.Start - 1
-		var e int = ed.End
-		var d int
-		var first bool = true
+		var (
+			match bool
+			s     int = ed.start - 1
+			e     int = ed.end
+			d     int
+			first bool = true
+		)
 		for i := e - 1; i >= s; i-- {
 			n = N
 			if re.MatchString(ed.Lines[i]) {
@@ -434,8 +438,10 @@ func (ed *Editor) DoCommand() (err error) {
 					cs.Init(strings.NewReader(repl))
 					cs.Mode = scanner.ScanChars
 					cs.Whitespace ^= scanner.GoWhitespace
-					var prepl string
-					var ctok rune = cs.Scan()
+					var (
+						prepl string
+						ctok  rune = cs.Scan()
+					)
 					for ctok != scanner.EOF {
 						if ctok != '\\' && cs.Peek() == '&' {
 							prepl += string(ctok)
@@ -462,12 +468,12 @@ func (ed *Editor) DoCommand() (err error) {
 					}
 					return s
 				})
-				ed.Start = d + 1
-				ed.End = ed.Start
-				ed.Dot = ed.Start
-				uo = append(uo, undoOp{action: undoAdd, start: i + 1, end: i, d: e, lines: ul})
-				uo = append(uo, undoOp{action: undoDelete, start: i, end: i + 1, lines: []string{ed.Lines[i]}})
-				ed.Dirty = true
+				ed.start = d + 1
+				ed.end = ed.start
+				ed.dot = ed.start
+				uo = append(uo, undoOperation{typ: undoAdd, start: i + 1, end: i, d: e, lines: ul})
+				uo = append(uo, undoOperation{typ: undoDelete, start: i, end: i + 1, lines: []string{ed.Lines[i]}})
+				ed.dirty = true
 			}
 		}
 		if !match {
@@ -483,17 +489,17 @@ func (ed *Editor) DoCommand() (err error) {
 		if err != nil {
 			return ErrDestinationExpected
 		}
-		if ed.Start-1 < 0 || ed.End > len(ed.Lines) || dst > len(ed.Lines) || dst < 0 {
+		if ed.start-1 < 0 || ed.end > len(ed.Lines) || dst > len(ed.Lines) || dst < 0 {
 			return ErrInvalidAddress
 		}
-		var lines []string = make([]string, ed.End-ed.Start+1)
-		copy(lines, ed.Lines[ed.Start-1:ed.End])
+		var lines = make([]string, ed.end-ed.start+1)
+		copy(lines, ed.Lines[ed.start-1:ed.end])
 		ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
-		ed.End = dst + len(lines)
-		uo = append(uo, undoOp{action: undoDelete, start: dst, end: dst + len(lines), d: dst + 1})
-		ed.Start = ed.End
-		ed.Dot = ed.End
-		ed.Dirty = true
+		ed.end = dst + len(lines)
+		uo = append(uo, undoOperation{typ: undoDelete, start: dst, end: dst + len(lines), d: dst + 1})
+		ed.start = ed.end
+		ed.dot = ed.end
+		ed.dirty = true
 		return nil
 	case 'u':
 		if ed.s.Pos().Offset != 1 {
@@ -502,13 +508,15 @@ func (ed *Editor) DoCommand() (err error) {
 		if ed.s.Peek() != scanner.EOF {
 			return ErrInvalidCmdSuffix
 		}
-		return ed.Undo()
+		return ed.undo()
 	case 'W':
 		fallthrough
 	case 'w':
-		var quit bool
-		var r rune = ed.tok
-		var full bool = (ed.s.Pos().Offset == 1)
+		var (
+			quit bool
+			r    = ed.tok
+			full = (ed.s.Pos().Offset == 1)
+		)
 		ed.tok = ed.s.Scan()
 		if r == 'w' {
 			if ed.tok == 'q' {
@@ -519,22 +527,22 @@ func (ed *Editor) DoCommand() (err error) {
 		if ed.tok == ' ' {
 			ed.tok = ed.s.Scan()
 		}
-		var fname string = ed.scanString()
-		if fname == "" && ed.Path == "" {
+		var fname = ed.scanString()
+		if fname == "" && ed.path == "" {
 			return ErrNoFileName
 		}
 		if fname == "" {
-			fname = ed.Path
+			fname = ed.path
 		}
-		var s, e int = ed.Start, ed.End
+		var s, e int = ed.start, ed.end
 		if full {
 			s = 1
 			e = len(ed.Lines)
 		}
 		if r == 'w' {
-			err = ed.WriteFile(s, e, fname)
+			err = ed.writeFile(s, e, fname)
 		} else {
-			err = ed.AppendFile(s, e, fname)
+			err = ed.appendFile(s, e, fname)
 		}
 		if quit {
 			os.Exit(0)
@@ -546,15 +554,15 @@ func (ed *Editor) DoCommand() (err error) {
 		if err != nil || scroll == 0 {
 			scroll = ed.scroll
 		}
-		ed.Start = ed.End - 1
-		ed.End += scroll
-		if ed.End > len(ed.Lines) {
-			ed.End = len(ed.Lines)
+		ed.start = ed.end - 1
+		ed.end += scroll
+		if ed.end > len(ed.Lines) {
+			ed.end = len(ed.Lines)
 		}
-		for ; ed.Start < ed.End; ed.Start++ {
-			fmt.Fprintf(ed.out, "%s\n", ed.Lines[ed.Start])
+		for ; ed.start < ed.end; ed.start++ {
+			fmt.Fprintf(ed.out, "%s\n", ed.Lines[ed.start])
 		}
-		ed.Dot = ed.Start + 1
+		ed.dot = ed.start + 1
 		ed.scroll = scroll
 		return nil
 	case '=':
@@ -563,9 +571,8 @@ func (ed *Editor) DoCommand() (err error) {
 	case '!':
 		ed.tok = ed.s.Scan()
 		ed.skipWhitespace()
-		var buf string = ed.scanString()
-		var output []string
-		output, err = ed.ReadFile("!"+buf, false, false)
+		var buf = ed.scanString()
+		output, err := ed.readFile("!"+buf, false, false)
 		if err != nil {
 			return err
 		}
@@ -578,21 +585,21 @@ func (ed *Editor) DoCommand() (err error) {
 		fallthrough
 	case scanner.EOF:
 		if ed.s.Pos().Offset == 0 {
-			ed.Dot++
-			if ed.Dot >= len(ed.Lines) {
-				ed.Dot = len(ed.Lines)
+			ed.dot++
+			if ed.dot >= len(ed.Lines) {
+				ed.dot = len(ed.Lines)
 				err = ErrInvalidAddress
 			}
-			ed.Start = ed.Dot
-			ed.End = ed.Dot
+			ed.start = ed.dot
+			ed.end = ed.dot
 			if err != nil {
 				return err
 			}
 		}
-		if ed.End-1 < 0 {
+		if ed.end-1 < 0 {
 			return ErrInvalidAddress
 		}
-		fmt.Fprintf(ed.out, "%s\n", ed.Lines[ed.End-1])
+		fmt.Fprintf(ed.out, "%s\n", ed.Lines[ed.end-1])
 		return err
 	default:
 		return ErrUnknownCmd

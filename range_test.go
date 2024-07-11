@@ -15,7 +15,7 @@ var dummyFile = []string{
 // TestRange() runs tests on the range parser and verifies the start, end and
 // dot position. It also compares the output.
 func TestRange(t *testing.T) {
-	var ted *Editor = NewEditor(nil, io.Discard, io.Discard)
+	var ted = New(WithStdin(nil), WithStdout(io.Discard), WithStderr(io.Discard))
 	ted.setupTestFile(dummyFile)
 	tests := []struct {
 		input             []byte
@@ -99,20 +99,20 @@ func TestRange(t *testing.T) {
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
 			var b bytes.Buffer
-			ted.ReadInput(bytes.NewBuffer(test.input))
+			ted.readInput(bytes.NewBuffer(test.input))
 			ted.out = &b
-			if err := ted.DoRange(); err != nil {
+			if err := ted.parseRange(); err != nil {
 				t.Fatalf("expected the range to be valid but failed: %s", err)
 			}
-			if err := ted.DoCommand(); err != nil {
+			if err := ted.doCommand(); err != nil {
 				t.Fatalf("expected the command to be valid but failed: %s", err)
 			}
-			if ted.Start != test.expectedStart {
+			if ted.start != test.expectedStart {
 				t.Errorf("expected start position %d, got %d",
-					test.expectedStart, ted.Start)
+					test.expectedStart, ted.start)
 			}
-			if ted.End != test.expectedEnd {
-				t.Errorf("expected end position %d, got %d", test.expectedEnd, ted.End)
+			if ted.end != test.expectedEnd {
+				t.Errorf("expected end position %d, got %d", test.expectedEnd, ted.end)
 			}
 			// if ted.Dot != test.expectedDot {
 			// 	t.Errorf("expected dot position %d, got %d", test.expectedDot, ted.Dot)
@@ -130,10 +130,10 @@ func TestRange(t *testing.T) {
 
 func (ed *Editor) setupTestFile(buf []string) {
 	ed.Lines = buf
-	ed.Path = "test"
-	ed.Dot = len(buf)
-	ed.Start = ed.Dot
-	ed.End = ed.Dot
+	ed.path = "test"
+	ed.dot = len(buf)
+	ed.start = ed.dot
+	ed.end = ed.dot
 	ed.addr = -1
 }
 

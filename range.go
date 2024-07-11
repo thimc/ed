@@ -8,9 +8,11 @@ import (
 
 // nextAddress attempts to extract the next valid address.
 func (ed *Editor) nextAddress() (int, error) {
-	ed.addr = ed.Dot
-	var mod rune
-	var first bool
+	ed.addr = ed.dot
+	var (
+		mod   rune
+		first bool
+	)
 	for first = true; ; first = false {
 		for {
 			switch ed.tok {
@@ -35,7 +37,7 @@ func (ed *Editor) nextAddress() (int, error) {
 			}
 			ed.addr = len(ed.Lines)
 			if ed.tok == '.' {
-				ed.addr = ed.Dot
+				ed.addr = ed.dot
 			}
 			ed.tok = ed.s.Scan()
 		case ed.tok == '?':
@@ -44,9 +46,9 @@ func (ed *Editor) nextAddress() (int, error) {
 			if !first {
 				return 0, ErrInvalidAddress
 			}
-			var mod rune = ed.tok
+			var mod = ed.tok
 			ed.tok = ed.s.Scan()
-			var search string = ed.scanStringUntil(mod)
+			var search = ed.scanStringUntil(mod)
 			if ed.tok == mod {
 				ed.tok = ed.s.Scan()
 			}
@@ -57,9 +59,9 @@ func (ed *Editor) nextAddress() (int, error) {
 				}
 			}
 			ed.search = search
-			var s, e int = 0, len(ed.Lines)
+			var s, e = 0, len(ed.Lines)
 			if mod == '?' {
-				s = ed.End - 1
+				s = ed.end - 1
 				e = 0
 			}
 			for i := s; i != e; {
@@ -86,16 +88,16 @@ func (ed *Editor) nextAddress() (int, error) {
 				return 0, ErrInvalidAddress
 			}
 			ed.tok = ed.s.Scan()
-			var r rune = ed.tok
+			var r = ed.tok
 			ed.tok = ed.s.Scan()
 			if r == scanner.EOF || !unicode.IsLower(r) {
 				return 0, ErrInvalidMark
 			}
-			var mark int = int(r) - 'a'
+			var mark = int(r) - 'a'
 			if mark < 0 || mark > len(ed.mark) {
 				return 0, ErrInvalidMark
 			}
-			var maddr int = ed.mark[mark]
+			var maddr = ed.mark[mark]
 			if maddr <= 0 || maddr > len(ed.Lines) {
 				return 0, ErrInvalidAddress
 			}
@@ -139,23 +141,22 @@ func (ed *Editor) nextAddress() (int, error) {
 		case ed.tok == '%':
 			fallthrough
 		case ed.tok == ',':
-			var r rune = ed.tok
+			var r = ed.tok
 			if first {
 				ed.tok = ed.s.Scan()
-				var err error
 				n, err := ed.nextAddress()
 				if err != nil {
 					return 0, err
 				}
 				ed.addr = n
-				if n == ed.Dot && ed.Start == ed.End {
-					ed.Start = 1
+				if n == ed.dot && ed.start == ed.end {
+					ed.start = 1
 					if r == ';' {
-						ed.Start = ed.End
+						ed.start = ed.end
 					}
-					ed.Dot = len(ed.Lines)
-					ed.addr = ed.Dot
-					ed.End = ed.Dot
+					ed.dot = len(ed.Lines)
+					ed.addr = ed.dot
+					ed.end = ed.dot
 					ed.addrCount = 2
 					return -1, nil
 				}
@@ -171,14 +172,16 @@ func (ed *Editor) nextAddress() (int, error) {
 	}
 }
 
-// DoRange parses user input to extract the specified line or range
+// parseRange parses user input to extract the specified line or range
 // on which the user intends to execute commands.
-func (ed *Editor) DoRange() error {
-	var n int
-	var err error
+func (ed *Editor) parseRange() error {
+	var (
+		n   int
+		err error
+	)
 	ed.addrCount = 0
-	ed.Start = ed.Dot
-	ed.End = ed.Dot
+	ed.start = ed.dot
+	ed.end = ed.dot
 	if ed.tok == scanner.EOF {
 		goto end
 	}
@@ -192,24 +195,32 @@ func (ed *Editor) DoRange() error {
 		}
 		ed.addr = n
 		ed.addrCount++
-		ed.Start = ed.End
-		ed.End = ed.addr
+		ed.start = ed.end
+		ed.end = ed.addr
 		if ed.tok != ',' && ed.tok != ';' {
 			break
 		} else if ed.s.Peek() == ';' {
-			ed.Dot = ed.addr
+			ed.dot = ed.addr
 		}
 		if ed.tok == scanner.EOF {
 			break
 		}
 	}
 end:
-	if ed.addrCount == 1 || ed.End != ed.addr {
-		ed.Start = ed.End
+	if ed.addrCount == 1 || ed.end != ed.addr {
+		ed.start = ed.end
 	}
-	ed.Dot = ed.End
-	if err := ed.checkRange(); err != nil {
-		return err
+	ed.dot = ed.end
+
+	skipCmds := []rune{'a', 'e', 'E', 'f', 'h', 'H', 'i', 'P', 'q', 'Q', 'r', 'u', '!', '='}
+	for _, cmd := range skipCmds {
+		if ed.tok == cmd {
+			return nil
+		}
 	}
+	if ed.start > ed.end || ed.start < 1 || ed.end < 1 || ed.end > len(ed.Lines) || ed.addr > len(ed.Lines) {
+		return ErrInvalidAddress
+	}
+
 	return nil
 }
