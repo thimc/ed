@@ -1,3 +1,5 @@
+// Command ed implements the OpenBSD variant of ed, the standard text
+// editor in Unix. Originally created by Ken Thompson in the 1970s.
 package main
 
 import (
