@@ -697,6 +697,7 @@ func TestCmdExplainError(t *testing.T) {
 		ted           = New(WithStdin(nil), WithStdout(io.Discard), WithStderr(io.Discard))
 		expectedError = ErrNoFileName
 	)
+	ted.printErrors = true
 	ted.in = bytes.NewBufferString("f")
 	if err := ted.Do(); err != expectedError {
 		t.Fatalf("expected error %q, got %q", expectedError, err)
