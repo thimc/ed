@@ -15,7 +15,10 @@ var dummyFile = []string{
 // TestRange() runs tests on the range parser and verifies the start, end and
 // dot position. It also compares the output.
 func TestRange(t *testing.T) {
-	var ted = New(WithStdin(nil), WithStdout(io.Discard), WithStderr(io.Discard))
+	var (
+		b   bytes.Buffer
+		ted = New(WithStdin(nil), WithStdout(&b), WithStderr(io.Discard))
+	)
 	ted.setupTestFile(dummyFile)
 	tests := []struct {
 		input             []byte
@@ -98,14 +101,10 @@ func TestRange(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(string(test.input), func(t *testing.T) {
-			var b bytes.Buffer
-			ted.readInput(bytes.NewBuffer(test.input))
-			ted.out = &b
-			if err := ted.parseRange(); err != nil {
-				t.Fatalf("expected the range to be valid but failed: %s", err)
-			}
-			if err := ted.doCommand(); err != nil {
-				t.Fatalf("expected the command to be valid but failed: %s", err)
+			b.Reset()
+			ted.in = bytes.NewBuffer(test.input)
+			if err := ted.Do(); err != nil {
+				t.Fatalf("expected no error, got %q", err)
 			}
 			if ted.start != test.expectedStart {
 				t.Errorf("expected start position %d, got %d",
@@ -138,12 +137,11 @@ func (ed *Editor) setupTestFile(buf []string) {
 	ed.addr = -1
 }
 
-func (ed *Editor) removeDummyFile(fname string) {
-	if _, err := os.Stat(fname); err == nil {
-		if err := os.Remove(fname); err != nil {
-			panic(err)
-		}
+func (ed *Editor) removeDummyFile(fname string) error {
+	if err := os.Remove(fname); err != nil {
+		return err
 	}
+	return nil
 }
 
 func (ed *Editor) createDummyFile(fname string) error {
@@ -154,7 +152,7 @@ func (ed *Editor) createDummyFile(fname string) error {
 	}
 	defer file.Close()
 	for _, ln := range dummyFile {
-		_, err := file.WriteString(ln+"\n")
+		_, err := file.WriteString(ln + "\n")
 		if err != nil {
 			return err
 		}

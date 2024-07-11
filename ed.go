@@ -111,7 +111,15 @@ func New(opts ...OptionFunc) *Editor {
 	for _, opt := range opts {
 		opt(ed)
 	}
-	go ed.setupSignals()
+	signal.Notify(ed.sigintch, syscall.SIGINT, os.Interrupt)
+	signal.Notify(ed.sighupch, syscall.SIGHUP, syscall.SIGQUIT)
+	go func() {
+		for range ed.sighupch {
+			if ed.dirty {
+				ed.writeFile(false, 1, len(ed.Lines), DefaultHangupFile)
+			}
+		}
+	}()
 	return ed
 }
 
@@ -203,17 +211,6 @@ func (ed *Editor) readInput(r io.Reader) error {
 	return nil
 }
 
-// setupSignals sets up signal handlers for SIGHUP and SIGINT.
-func (ed *Editor) setupSignals() {
-	signal.Notify(ed.sigintch, syscall.SIGINT, os.Interrupt)
-	signal.Notify(ed.sighupch, syscall.SIGHUP, syscall.SIGQUIT)
-	for range ed.sighupch {
-		if ed.dirty {
-			ed.writeFile(1, len(ed.Lines), DefaultHangupFile)
-		}
-	}
-}
-
 // readFile checks if the 'path' starts with a '!' and if so executes
 // what it presumes to be a valid shell command in sh(1). If readFile
 // deems 'path' not to be a shell expression it will attempt to open
@@ -222,15 +219,17 @@ func (ed *Editor) setupSignals() {
 // If 'printsiz' is set to true, the size in bytes is printed to the
 // 'err io.Writer'.
 func (ed *Editor) readFile(path string, setdot bool, printsiz bool) ([]string, error) {
-	var siz int64
-	var cmd bool
+	var (
+		siz   int64
+		cmd   bool
+		lines []string
+	)
 	if len(path) > 0 {
 		cmd = (path[0] == '!')
 		if cmd {
 			path = path[1:]
 		}
 	}
-	var lines []string
 	switch cmd {
 	case true:
 		if path == "" {
@@ -241,7 +240,10 @@ func (ed *Editor) readFile(path string, setdot bool, printsiz bool) ([]string, e
 		}
 		output, err := ed.shell(path)
 		if err != nil {
-			return lines, ErrZero
+			if !ed.printErrors {
+				err = ErrZero
+			}
+			return lines, err
 		}
 		for _, line := range output {
 			lines = append(lines, line)
@@ -284,11 +286,20 @@ func (ed *Editor) readFile(path string, setdot bool, printsiz bool) ([]string, e
 	return lines, nil
 }
 
-// writeFile function will attempt to write the lines from index 'start'
-// to 'end' in the file specified by 'path.' If successful, the current
-// buffer will no longer be considered dirty.
-func (ed *Editor) writeFile(start, end int, path string) error {
-	file, err := os.Create(path)
+// writeFile writes (or appends) the buffer lines from `start` to
+// `end` to `path`. It clears the `dirty` flag if successful. `append`
+// determines if the data will be appended to the existing or if the
+// file will be overriden.
+func (ed *Editor) writeFile(append bool, start, end int, path string) error {
+	var (
+		file *os.File
+		err  error
+	)
+	if append {
+		file, err = os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
+	} else {
+		file, err = os.Create(path)
+	}
 	if err != nil {
 		return err
 	}
@@ -309,33 +320,9 @@ func (ed *Editor) writeFile(start, end int, path string) error {
 	return err
 }
 
-// appendFile will open the file 'path' and append the lines starting
-// at index 'start' until 'end.' If successful, the current buffer
-// will no longer be considered dirty.
-func (ed *Editor) appendFile(start, end int, path string) error {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	var siz int
-	for i := start - 1; i < end; i++ {
-		var line string = ed.Lines[i]
-		_, err := file.WriteString(line + "\n")
-		if err != nil {
-			return err
-		}
-		siz += len(line) + 1
-	}
-	ed.dirty = false
-	if !ed.silent {
-		fmt.Fprintln(ed.err, siz)
-	}
-	return err
-}
-
-// shell runs the 'command' in /bin/sh and returns the standard output.
-// It will replace any unescaped '%' with the name of the current buffer.
+// shell runs the 'command' in a subshell (`defaultShell`) and returns
+// the output.  It will replace any unescaped '%' with the name of the
+// current buffer.
 func (ed *Editor) shell(command string) ([]string, error) {
 	var output []string
 	var cs scanner.Scanner
@@ -382,9 +369,8 @@ func (ed *Editor) shell(command string) ([]string, error) {
 	return output, err
 }
 
-// scanString will advance the tokenizer, scanning the input buffer
-// until it reaches EOF, and return the collected tokens as a string.
-// Newlines (\n) and carriage returns (\r) are ignored.
+// scanString scans the user input until EOF. New lines and carriage
+// return symbols are ignored.
 func (ed *Editor) scanString() string {
 	var str string
 	for ed.tok != scanner.EOF {
@@ -396,10 +382,8 @@ func (ed *Editor) scanString() string {
 	return str
 }
 
-// scanStringUntil will advance the tokenizer, scanning the input
-// buffer until it reaches the delimiter 'delim' or EOF, and return
-// the collected tokens as a string.  Newlines (\n) and carriage returns
-// (\r) are ignored.
+// scanStringUntil works like `scanString` but will continue until it
+// sees `delim` or EOF.
 func (ed *Editor) scanStringUntil(delim rune) string {
 	var str string
 	for ed.tok != scanner.EOF && ed.tok != delim {
@@ -464,8 +448,8 @@ func (ed *Editor) undo() (err error) {
 	return nil
 }
 
-// Do reads a command from `stdin` and executes the command.
-// The output is printed to `stdout` and errors to `stderr`.
+// Do reads a command from `in` and executes the command.
+// The output is printed to `out` and errors to `err`.
 func (ed *Editor) Do() error {
 	if err := ed.readInput(ed.in); err != nil {
 		return err

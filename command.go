@@ -664,12 +664,7 @@ func (ed *Editor) cmdWrite(append bool) error {
 		s = 1
 		e = len(ed.Lines)
 	}
-	var err error
-	if append {
-		err = ed.appendFile(s, e, fname)
-	} else {
-		err = ed.writeFile(s, e, fname)
-	}
+	var err = ed.writeFile(append, s, e, fname)
 	if quit {
 		os.Exit(0)
 	}

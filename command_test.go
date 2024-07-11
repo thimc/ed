@@ -112,7 +112,6 @@ func TestCmdBang(t *testing.T) {
 			var b bytes.Buffer
 			ted.printErrors = true
 			ted.err = &b
-			ted.readInput(strings.NewReader(test.input))
 			ted.in = strings.NewReader(test.input)
 			if err := ted.Do(); err != test.expectedError {
 				t.Fatalf("expected no error, got %q for cmd %q", err, test.input)
