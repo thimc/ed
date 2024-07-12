@@ -92,19 +92,19 @@ func TestCmdBang(t *testing.T) {
 			expectedError: ErrNoCmd,
 		},
 		{
-			input:          "!ls *.go | wc -l", // probably a bad idea
+			input:          "!ls README.md | wc -l", // probably a bad idea
 			expectedError:  nil,
-			expectedOutput: "6\n!\n",
+			expectedOutput: "1\n!\n",
 		},
 		{
 			input:          "!",
 			expectedError:  nil,
-			expectedOutput: "6\n!\n",
+			expectedOutput: "1\n!\n",
 		},
 		{
 			input:          "! ",
 			expectedError:  nil,
-			expectedOutput: "6\n!\n",
+			expectedOutput: "1\n!\n",
 		},
 	}
 	for _, test := range tests {
