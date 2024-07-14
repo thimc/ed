@@ -6,14 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
-	"text/scanner"
-	"unicode"
 )
 
 const (
@@ -56,6 +54,7 @@ var (
 	ErrNoFileName          = errors.New("no current filename")
 	ErrNoMatch             = errors.New("no match")
 	ErrNoPrevPattern       = errors.New("no previous pattern")
+	ErrNoPreviousCmd       = errors.New("no previous command")
 	ErrNoPreviousSub       = errors.New("no previous substitution")
 	ErrNothingToUndo       = errors.New("nothing to undo")
 	ErrUnexpectedAddress   = errors.New("unexpected address")
@@ -65,36 +64,38 @@ var (
 )
 
 type Editor struct {
-	path        string          // file path
-	dirty       bool            // modified
-	Lines       []string        // File buffer
-	mark        [25]int         // a to z
-	dot         int             // current position
-	start       int             // start position
-	end         int             // end position
-	input       []byte          // user input
-	addrCount   int             // number of addresses in the current input
-	addr        int             // internal address
-	s           scanner.Scanner // token scanner for the input byte array
-	tok         rune            // current token
-	undohist    [][]undoAction  // undo history
-	globalUndo  []undoAction    // undo actions caught during global cmds
-	g           bool            // global command state
-	error       error           // previous error
-	scroll      int             // previous scroll value
-	search      string          // previous search criteria for /, ? or s
-	replacestr  string          // previous s replacement
-	showPrompt  bool            // toggle for displaying the prompt
-	prompt      string          // user prompt
-	shellCmd    string          // previous command for !
-	globalCmd   string          // previous command used by g, G, v and V
-	printErrors bool            // toggle errors
-	silent      bool            // chatty
-	sighupch    chan os.Signal
-	sigintch    chan os.Signal
-	in          io.Reader // standard input
-	out         io.Writer // standard output
-	err         io.Writer // standard error
+	path  string   // file path
+	dirty bool     // modified
+	Lines []string // File buffer
+	mark  [25]int  // a to z
+	dot   int      // current position
+
+	start int // start position
+	end   int // end position
+	addrc int // number of addresses in the current input
+
+	*Tokenizer // user input
+
+	undohist    [][]undoAction // undo history
+	globalUndo  []undoAction   // undo actions caught during global cmds
+	g           bool           // global command state
+	error       error          // previous error
+	scroll      int            // previous scroll value
+	search      string         // previous search criteria for /, ? or s
+	replacestr  string         // previous s replacement
+	showPrompt  bool           // toggle for displaying the prompt
+	prompt      string         // user prompt
+	shellCmd    string         // previous command for !
+	globalCmd   string         // previous command used by g, G, v and V
+	printErrors bool           // toggle errors
+	silent      bool           // chatty
+
+	sighupch chan os.Signal
+	sigintch chan os.Signal
+
+	in  io.Reader // standard input
+	out io.Writer // standard output
+	err io.Writer // standard error
 }
 
 // New creates a new instance of the Ed editor. It defaults to reading
@@ -119,6 +120,7 @@ func New(opts ...OptionFunc) *Editor {
 			if ed.dirty {
 				ed.writeFile(false, 1, len(ed.Lines), DefaultHangupFile)
 			}
+			ed.error = ErrInterrupt
 		}
 	}()
 	return ed
@@ -181,36 +183,20 @@ func WithSilent(b bool) OptionFunc {
 // readInput reads user input from the io.Reader until it encounters
 // a newline symbol (\n') or EOF. After that it sets up the scanner
 // and tokenizer.
-func (ed *Editor) readInput(r io.Reader) error {
-	ed.input = []byte{}
-	buf := make([]byte, 1)
-	if ed.showPrompt {
-		fmt.Fprintf(ed.err, "%s", ed.prompt)
-	}
-	for {
-		n, err := r.Read(buf)
-		if n == 0 {
-			if len(ed.input) == 0 {
-				return errors.New("EOF")
-			}
-			break
-		}
-		if buf[0] == '\n' {
-			break
-		}
-		ed.input = append(ed.input, buf[0])
-		if err != nil {
-			return err
-		}
-	}
-
-	ed.s.Init(bytes.NewReader(ed.input))
-	ed.s.Mode = scanner.ScanStrings
-	ed.s.Whitespace ^= scanner.GoWhitespace
-	ed.tok = ed.s.Scan()
-
-	return nil
-}
+// func (ed *Editor) readInput(r io.Reader) error {
+// br := bufio.NewReader(r)
+// ln, err := br.ReadString('\n')
+// if err != nil {
+// 	if errors.Is(err, io.EOF) {
+// 		return ErrInterrupt
+// 	}
+// 	return err
+// }
+// if len(ln) > 1 {
+// 	ln = ln[:len(ln)-1]
+// }
+// 	return nil
+// }
 
 // readFile checks if the 'path' starts with a '!' and if so executes
 // what it presumes to be a valid shell command in sh(1). If readFile
@@ -324,98 +310,34 @@ func (ed *Editor) writeFile(append bool, start, end int, path string) error {
 // shell runs the 'command' in a subshell (`defaultShell`) and returns
 // the output.  It will replace any unescaped '%' with the name of the
 // current buffer.
-func (ed *Editor) shell(command string) ([]string, error) {
-	var output []string
-	var cs scanner.Scanner
-	cs.Init(strings.NewReader(command))
-	cs.Mode = scanner.ScanChars
-	cs.Whitespace ^= scanner.GoWhitespace
+func (ed *Editor) shell(cmd string) ([]string, error) {
+	t := NewTokenizer(strings.NewReader(cmd))
+	t.token()
 	var parsed string
-	var ctok rune = cs.Scan()
-	if ctok == ' ' {
-		ctok = cs.Scan()
-	}
-	for ctok != scanner.EOF {
-		parsed += string(ctok)
-		if ctok != '\\' && cs.Peek() == '%' {
+	for t.tok != EOF {
+		parsed += string(t.tok)
+		if t.tok != '\\' && t.peek() == '%' {
 			if ed.path == "" {
-				return output, ErrNoFileName
+				return nil, ErrNoFileName
 			}
-			ctok = cs.Scan()
+			t.token()
 			parsed += ed.path
 		}
-		ctok = cs.Scan()
+		t.token()
 	}
-	cmd := exec.Command(DefaultShell, "-c", parsed)
-	stdout, err := cmd.StdoutPipe()
-	if err := cmd.Start(); err != nil {
-		return output, err
-	}
-	defer stdout.Close()
+	c := exec.Command(DefaultShell, "-c", parsed)
+	output, err := c.Output()
 	if err != nil {
-		return output, err
+		return nil, err
 	}
-	s := bufio.NewScanner(stdout)
-	s.Split(bufio.ScanLines)
-	for s.Scan() {
-		output = append(output, s.Text())
+	var (
+		lines  = bytes.Split(output, []byte("\n"))
+		result = make([]string, len(lines))
+	)
+	for i, line := range lines {
+		result[i] = string(line)
 	}
-	if err := cmd.Wait(); err != nil {
-		return output, err
-	}
-	if err := s.Err(); err != nil {
-		return output, err
-	}
-	ed.shellCmd = command
-	return output, err
-}
-
-// scanString scans the user input until EOF. New lines and carriage
-// return symbols are ignored.
-func (ed *Editor) scanString() string {
-	var str string
-	for ed.tok != scanner.EOF {
-		if ed.tok != '\n' && ed.tok != '\r' {
-			str += string(ed.tok)
-		}
-		ed.tok = ed.s.Scan()
-	}
-	return str
-}
-
-// scanStringUntil works like `scanString` but will continue until it
-// sees `delim` or EOF.
-func (ed *Editor) scanStringUntil(delim rune) string {
-	var str string
-	for ed.tok != scanner.EOF && ed.tok != delim {
-		if ed.tok != '\n' && ed.tok != '\r' {
-			str += string(ed.tok)
-		}
-		ed.tok = ed.s.Scan()
-	}
-	return str
-}
-
-// scanNumber attempts to lex a integer.
-func (ed *Editor) scanNumber() (int, error) {
-	var n, start, end int
-	var err error
-	start = ed.s.Position.Offset
-	for unicode.IsDigit(ed.tok) {
-		ed.tok = ed.s.Scan()
-	}
-	end = ed.s.Position.Offset
-	num := string(ed.input[start:end])
-	n, err = strconv.Atoi(num)
-	return n, err
-}
-
-// skipWhitespace advances the internal tokenizer until the
-// current token is not a white space, tab indent, or a newline.
-func (ed *Editor) skipWhitespace() {
-	for ed.tok == ' ' || ed.tok == '\t' || ed.tok == '\n' {
-		ed.tok = ed.s.Scan()
-	}
+	return result[:len(result)-1], nil
 }
 
 // undo undoes the last command and restores the current address
@@ -452,17 +374,20 @@ func (ed *Editor) undo() (err error) {
 // Do reads a command from `in` and executes the command.
 // The output is printed to `out` and errors to `err`.
 func (ed *Editor) Do() error {
-	if err := ed.readInput(ed.in); err != nil {
-		return err
-	}
-	if err := ed.parseRange(); err != nil {
+	ed.Tokenizer = NewTokenizer(ed.in)
+	ed.token()
+	if err := ed.parse(); err != nil && ed.tok == EOF {
 		ed.error = err
 		if !ed.printErrors {
 			return ErrDefault
 		}
 		return err
 	}
-	if err := ed.doCommand(); err != nil {
+
+	log.Printf("\033[1mstart=%d, end=%d, dot=%d, addrc=%d [tok:%q, eof:%t, len:%d]\n\033[0m",
+		ed.start, ed.end, ed.dot, ed.addrc, ed.tok, ed.tok == EOF, len(ed.Lines))
+
+	if err := ed.do(); err != nil {
 		ed.error = err
 		if !ed.printErrors {
 			return ErrDefault

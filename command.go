@@ -101,8 +101,9 @@ loop:
 	for {
 		select {
 		case <-ed.sigintch:
+			ed.error = ErrInterrupt
 			fmt.Fprintln(ed.err, ErrDefault)
-			break loop
+			return ErrInterrupt
 		default:
 			line, err := r.ReadString('\n')
 			if err != nil {
@@ -140,7 +141,7 @@ loop:
 		select {
 		case <-ed.sigintch:
 			fmt.Fprintln(ed.err, ErrDefault)
-			break loop
+			return ErrInterrupt
 		default:
 			line, err := r.ReadString('\n')
 			if err != nil {
@@ -266,12 +267,11 @@ func (ed *Editor) cmdGlobal(interactive, inverted bool) error {
 		if interactive {
 			fmt.Fprintln(ed.out, ed.Lines[idx])
 			r := bufio.NewReader(ed.in)
-		loop:
 			for {
 				select {
 				case <-ed.sigintch:
 					fmt.Fprintln(ed.err, ErrDefault)
-					break loop
+					return ErrInterrupt
 				default:
 					line, err := r.ReadString('\n')
 					line = line[:len(line)-1]
@@ -320,7 +320,7 @@ loop:
 		select {
 		case <-ed.sigintch:
 			fmt.Fprintln(ed.err, ErrDefault)
-			break loop
+			return ErrInterrupt
 		default:
 			line, err := r.ReadString('\n')
 			if err != nil {

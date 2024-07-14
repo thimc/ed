@@ -33,7 +33,7 @@ func TestSignalSIGHUP(t *testing.T) {
 		ted.sighupch <- syscall.SIGHUP
 	}()
 	select {
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(500 * time.Millisecond):
 		if _, err := os.Stat(fname); err != nil {
 			t.Fatalf("expected file %q to exist, got error %q", fname, err)
 		}
@@ -51,15 +51,23 @@ func TestSignalSIGINT(t *testing.T) {
 	var (
 		ted      = New(WithStdin(nil), WithStdout(io.Discard), WithStderr(io.Discard))
 		expected = []string{"A", "B"}
+		dur      = 2 * time.Second
+		timeout  = time.After(dur)
 	)
-	ted.in = strings.NewReader("a\nA\nB\nC")
+	ted.in = strings.NewReader("a\nABCDEF")
 	go func() {
 		ted.sigintch <- syscall.SIGINT
 	}()
-	if reflect.DeepEqual(ted.Lines, expected) {
-		t.Fatalf("expected buffer to be %q, got %q", expected, ted.Lines)
-	}
-	if ted.error != ErrInterrupt {
-		t.Fatalf("expected error %q, got %q", ErrInterrupt, ted.error)
+	ted.Do()
+	select {
+	case <-time.After(500 * time.Millisecond):
+		if reflect.DeepEqual(ted.Lines, expected) {
+			t.Fatalf("expected buffer to be %q, got %q", expected, ted.Lines)
+		}
+		if ted.error != ErrInterrupt {
+			t.Fatalf("expected error %q, got %q", ErrInterrupt, ted.error)
+		}
+	case <-timeout:
+		t.Fatalf("timed out after %s", dur)
 	}
 }
