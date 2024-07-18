@@ -13,6 +13,10 @@ that in the [regexp](https://pkg.go.dev/regexp) package.
 
 Written from scratch in Go with no third party dependencies.
 
+## TODO
+
+	godoc -notes 'TODO'
+
 ## Installation
 
 	go build
