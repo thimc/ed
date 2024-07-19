@@ -74,7 +74,7 @@ func (ed *Editor) getThirdAddress() (int, error) {
 		return -1, err
 	} else if ed.addrc == 0 {
 		return -1, ErrDestinationExpected
-	} else if ed.end < 0 || ed.end > len(ed.Lines) {
+	} else if ed.end < 0 || ed.end > len(ed.lines) {
 		return -1, ErrInvalidAddress
 	}
 	var addr = ed.end
@@ -96,15 +96,15 @@ func (ed *Editor) undo() (err error) {
 	for n := len(operation) - 1; n >= 0; n-- {
 		var (
 			op     = operation[n]
-			before = ed.Lines[:op.start-1]
-			after  = ed.Lines[op.start-1:]
+			before = ed.lines[:op.start-1]
+			after  = ed.lines[op.start-1:]
 		)
 		switch op.typ {
 		case undoDelete:
-			after = ed.Lines[op.end:]
-			ed.Lines = append(before, after...)
+			after = ed.lines[op.end:]
+			ed.lines = append(before, after...)
 		case undoAdd:
-			ed.Lines = append(before, append(op.lines, after...)...)
+			ed.lines = append(before, append(op.lines, after...)...)
 		}
 		ed.dot = op.dot
 		ed.modified = true
@@ -149,10 +149,10 @@ func (ed *Editor) global(r rune) error {
 		ed.globalCmd = cmd
 	}()
 	for idx := s - 1; idx <= e; idx++ {
-		if idx >= len(ed.Lines) {
+		if idx >= len(ed.lines) {
 			continue
 		}
-		matched, err := regexp.MatchString(search, ed.Lines[idx])
+		matched, err := regexp.MatchString(search, ed.lines[idx])
 		if err != nil {
 			return err
 		}
@@ -201,8 +201,8 @@ func (ed *Editor) global(r rune) error {
 			if err = ed.do(); err != nil {
 				return err
 			}
-			if e >= len(ed.Lines) {
-				e = len(ed.Lines) - 1
+			if e >= len(ed.lines) {
+				e = len(ed.lines) - 1
 				idx--
 			}
 		}
@@ -218,7 +218,7 @@ func (ed *Editor) global(r rune) error {
 // the line before the range.
 func (ed *Editor) deleteLines(start, end int, action *[]undoAction) error {
 	undolines := make([]string, end-start+1)
-	copy(undolines, ed.Lines[start-1:end])
+	copy(undolines, ed.lines[start-1:end])
 	*action = append(*action, undoAction{
 		typ:   undoAdd,
 		start: start,
@@ -226,9 +226,9 @@ func (ed *Editor) deleteLines(start, end int, action *[]undoAction) error {
 		dot:   ed.dot,
 		lines: undolines,
 	})
-	ed.Lines = append(ed.Lines[:start-1], ed.Lines[end:]...)
+	ed.lines = append(ed.lines[:start-1], ed.lines[end:]...)
 	ed.dot = start - 1
-	ed.start = min(start, len(ed.Lines))
+	ed.start = min(start, len(ed.lines))
 	ed.modified = true
 	return nil
 }
@@ -251,10 +251,10 @@ loop:
 			if line == "." {
 				break loop
 			}
-			if len(ed.Lines) == start {
-				ed.Lines = append(ed.Lines, line)
+			if len(ed.lines) == start {
+				ed.lines = append(ed.lines, line)
 			} else {
-				ed.Lines = append(ed.Lines[:start], append([]string{line}, ed.Lines[start:]...)...)
+				ed.lines = append(ed.lines[:start], append([]string{line}, ed.lines[start:]...)...)
 			}
 			start++
 			*action = append(*action, undoAction{
@@ -262,7 +262,7 @@ loop:
 				start: start,
 				end:   start,
 				dot:   ed.dot,
-				lines: ed.Lines[start-1 : start],
+				lines: ed.lines[start-1 : start],
 			})
 			ed.modified = true
 		}
@@ -272,8 +272,8 @@ loop:
 
 func (ed *Editor) joinLines(start, end int, action *[]undoAction) error {
 	var undolines = make([]string, end-start+1)
-	copy(undolines, ed.Lines[start-1:end])
-	var lines = strings.Join(ed.Lines[start-1:end], "")
+	copy(undolines, ed.lines[start-1:end])
+	var lines = strings.Join(ed.lines[start-1:end], "")
 	*action = append(*action, undoAction{
 		typ:   undoAdd,
 		start: start,
@@ -281,8 +281,8 @@ func (ed *Editor) joinLines(start, end int, action *[]undoAction) error {
 		dot:   ed.dot,
 		lines: undolines,
 	})
-	var joined []string = append(append([]string{}, ed.Lines[:start-1]...), lines)
-	ed.Lines = append(joined, ed.Lines[end:]...)
+	var joined []string = append(append([]string{}, ed.lines[:start-1]...), lines)
+	ed.lines = append(joined, ed.lines[end:]...)
 	*action = append(*action, undoAction{
 		typ:   undoDelete,
 		start: start,
@@ -306,10 +306,10 @@ func (ed *Editor) displayLines(start, end int, flags cmdSuffix) error {
 			ln = fmt.Sprintf("%d\t", ed.dot)
 		}
 		if flags&cmdSuffixList != 0 {
-			var q = strings.Replace(strconv.QuoteToASCII(ed.Lines[start]), "$", "\\$", -1)
+			var q = strings.Replace(strconv.QuoteToASCII(ed.lines[start]), "$", "\\$", -1)
 			ln += fmt.Sprintf("%s$", q[1:len(q)-1])
 		} else {
-			ln += ed.Lines[start]
+			ln += ed.lines[start]
 		}
 		fmt.Fprintln(ed.out, ln)
 		start++
@@ -319,7 +319,7 @@ func (ed *Editor) displayLines(start, end int, flags cmdSuffix) error {
 
 func (ed *Editor) moveLines(addr int, action *[]undoAction) error {
 	var lines = make([]string, ed.end-ed.start+1)
-	copy(lines, ed.Lines[ed.start-1:ed.end])
+	copy(lines, ed.lines[ed.start-1:ed.end])
 	*action = append(*action, undoAction{
 		typ:   undoAdd,
 		start: ed.start,
@@ -327,14 +327,14 @@ func (ed *Editor) moveLines(addr int, action *[]undoAction) error {
 		dot:   ed.dot,
 		lines: lines,
 	})
-	ed.Lines = append(ed.Lines[:ed.start-1], ed.Lines[ed.end:]...)
+	ed.lines = append(ed.lines[:ed.start-1], ed.lines[ed.end:]...)
 	if addr-len(lines) < 0 {
 		addr = len(lines) + addr
 	}
-	ed.Lines = append(ed.Lines[:addr-len(lines)], append(lines, ed.Lines[addr-len(lines):]...)...)
+	ed.lines = append(ed.lines[:addr-len(lines)], append(lines, ed.lines[addr-len(lines):]...)...)
 
 	var undolines = make([]string, len(lines))
-	copy(undolines, ed.Lines[addr-len(lines):addr])
+	copy(undolines, ed.lines[addr-len(lines):addr])
 	*action = append(*action, undoAction{
 		typ:   undoDelete,
 		start: addr - ed.start + 1,
@@ -352,8 +352,8 @@ func (ed *Editor) moveLines(addr int, action *[]undoAction) error {
 
 func (ed *Editor) copyLines(addr int, action *[]undoAction) error {
 	var lines = make([]string, ed.end-ed.start+1)
-	copy(lines, ed.Lines[ed.start-1:ed.end])
-	ed.Lines = append(ed.Lines[:addr], append(lines, ed.Lines[addr:]...)...)
+	copy(lines, ed.lines[ed.start-1:ed.end])
+	ed.lines = append(ed.lines[:addr], append(lines, ed.lines[addr:]...)...)
 	ed.end = addr + len(lines)
 	*action = append(*action, undoAction{
 		typ:   undoDelete,
@@ -387,7 +387,7 @@ func (ed *Editor) readFile(path string) error {
 		if err != nil {
 			return err
 		}
-		ed.Lines = lines
+		ed.lines = lines
 		siz = int64(len(strings.Join(lines, " "))) + 1
 	} else {
 		f, err := os.Open(path)
@@ -407,13 +407,13 @@ func (ed *Editor) readFile(path string) error {
 			return ErrCannotCloseFile
 		}
 		var lines = strings.Split(strings.TrimRight(string(buf), "\n"), "\n")
-		ed.Lines = lines
+		ed.lines = lines
 		ed.path = path
 	}
 	if !ed.scripted {
 		fmt.Fprintln(ed.err, siz)
 	}
-	ed.dot = len(ed.Lines)
+	ed.dot = len(ed.lines)
 	return nil
 }
 
@@ -433,7 +433,7 @@ func (ed *Editor) writeFile(path string, mod rune, start, end int) error {
 	defer file.Close()
 	var siz int
 	for i := start - 1; i < end; i++ {
-		var line string = ed.Lines[i]
+		var line string = ed.lines[i]
 		_, err := file.WriteString(line + "\n")
 		if err != nil {
 			return err
@@ -493,7 +493,7 @@ func (ed *Editor) do() (err error) {
 			return err
 		}
 		ed.dot += 1
-		if addr := ed.dot; addr > len(ed.Lines) {
+		if addr := ed.dot; addr > len(ed.lines) {
 			ed.dot = addr
 		}
 		return nil
@@ -513,7 +513,7 @@ func (ed *Editor) do() (err error) {
 		ed.skipWhitespace()
 		ed.globalUndo = nil
 		ed.undohist = nil
-		ed.Lines = nil
+		ed.lines = nil
 		action = nil
 		ed.modified = false
 		// TODO(thce): Edit/edit should take a command suffix.
@@ -551,7 +551,7 @@ func (ed *Editor) do() (err error) {
 		ed.token()
 		if ed.g {
 			return ErrCannotNestGlobal
-		} else if err := ed.check(1, len(ed.Lines)); err != nil {
+		} else if err := ed.check(1, len(ed.lines)); err != nil {
 			return err
 		}
 		return ed.global(mod)
@@ -663,7 +663,7 @@ func (ed *Editor) do() (err error) {
 		if !unicode.IsSpace(ed.token()) {
 			return ErrUnexpectedCmdSuffix
 		} else if ed.addrc == 0 {
-			ed.end = len(ed.Lines)
+			ed.end = len(ed.lines)
 		}
 		var path string
 		if path = ed.scanString(); path == "" {
@@ -751,12 +751,12 @@ func (ed *Editor) do() (err error) {
 		}
 		var subs int
 		for i := 0; i <= ed.end-ed.start; i++ {
-			if !re.MatchString(ed.Lines[i]) {
+			if !re.MatchString(ed.lines[i]) {
 				continue
 			}
 			var (
-				submatch = re.FindAllStringSubmatch(ed.Lines[i], -1)
-				matches  = re.FindAllStringIndex(ed.Lines[i], nth)
+				submatch = re.FindAllStringSubmatch(ed.lines[i], -1)
+				matches  = re.FindAllStringIndex(ed.lines[i], nth)
 			)
 			for mn, match := range matches {
 				if nth > 1 && mn != nth-1 {
@@ -776,17 +776,13 @@ func (ed *Editor) do() (err error) {
 							t.token()
 						}
 						t.token()
-						r += ed.Lines[i][start:end]
+						r += ed.lines[i][start:end]
 						continue
 					} else if t.tok == '\\' && unicode.IsDigit(t.peek()) {
 						t.token()
 						n, err := strconv.Atoi(string(t.tok))
 						if err != nil {
-							// TODO(thimc): verify which error the substitute command returns if
-							// the number is not valid as per: The character sequence \m, where m
-							// is a number in the range [1,9], is replaced by the mth backreference
-							// expression of the matched text.
-							return ErrInvalidCmdSuffix
+							return ErrNumberOutOfRange
 						}
 						t.token()
 						r += submatch[0][n-1]
@@ -795,13 +791,13 @@ func (ed *Editor) do() (err error) {
 					r += string(t.tok)
 					t.token()
 				}
-				var replaced = ed.Lines[i][:start] + re.ReplaceAllString(search, r) + ed.Lines[i][end:]
+				var replaced = ed.lines[i][:start] + re.ReplaceAllString(search, r) + ed.lines[i][end:]
 				action = append(action,
 					undoAction{typ: undoAdd,
 						start: i + 1,
 						end:   i + 1,
 						dot:   ed.dot,
-						lines: []string{ed.Lines[i]},
+						lines: []string{ed.lines[i]},
 					})
 				action = append(action, undoAction{
 					typ:   undoDelete,
@@ -809,7 +805,7 @@ func (ed *Editor) do() (err error) {
 					end:   i + 1,
 					lines: []string{replaced},
 				})
-				ed.Lines[i] = replaced
+				ed.lines[i] = replaced
 			}
 			ed.dot = i + 1
 			subs++
@@ -858,7 +854,7 @@ func (ed *Editor) do() (err error) {
 		if path[0] == ' ' {
 			path = path[1:]
 		}
-		if ed.addrc == 0 && len(ed.Lines) < 1 {
+		if ed.addrc == 0 && len(ed.lines) < 1 {
 			ed.start = 0
 			ed.end = 0
 		}
@@ -905,7 +901,7 @@ func (ed *Editor) do() (err error) {
 		if err := ed.getCmdSuffix(); err != nil {
 			return err
 		}
-		return ed.displayLines(ed.end, min(len(ed.Lines), ed.end+n), ed.cs)
+		return ed.displayLines(ed.end, min(len(ed.lines), ed.end+n), ed.cs)
 	case '=':
 		ed.token()
 		if err := ed.getCmdSuffix(); err != nil {
@@ -913,7 +909,7 @@ func (ed *Editor) do() (err error) {
 		}
 		var n = ed.end
 		if ed.addrc > 1 {
-			n = len(ed.Lines)
+			n = len(ed.lines)
 		}
 		fmt.Fprintln(ed.out, n)
 		return nil

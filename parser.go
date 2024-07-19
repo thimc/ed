@@ -8,6 +8,8 @@ import (
 	"unicode"
 )
 
+// parse parses the user input for valid addresses and returns if the
+// current token is not a valid range command or EOF.
 func (ed *Editor) parse() error {
 	var (
 		addr int
@@ -43,6 +45,7 @@ func (ed *Editor) parse() error {
 	return nil
 }
 
+// nextAddress extracts the next address in the user input.
 func (ed *Editor) nextAddress() (int, error) {
 	var (
 		addr  = ed.dot
@@ -85,7 +88,7 @@ func (ed *Editor) nextAddress() (int, error) {
 			if ed.tokpos != startpos {
 				return -1, ErrInvalidAddress
 			}
-			addr = len(ed.Lines)
+			addr = len(ed.lines)
 			if ed.tok == '.' {
 				addr = ed.dot
 			}
@@ -107,13 +110,13 @@ func (ed *Editor) nextAddress() (int, error) {
 				}
 			}
 			ed.search = search
-			var s, e = 0, len(ed.Lines)
+			var s, e = 0, len(ed.lines)
 			if mod == '?' {
 				s = ed.start - 2
 				e = 0
 			}
 			for i := s; i != e; { //i > s && i < e; {
-				match, err := regexp.MatchString(search, ed.Lines[i])
+				match, err := regexp.MatchString(search, ed.lines[i])
 				if err != nil {
 					return 0, ErrNoMatch
 				}
@@ -142,7 +145,7 @@ func (ed *Editor) nextAddress() (int, error) {
 				return -1, ErrInvalidMark
 			}
 			var maddr = ed.mark[mark]
-			if maddr < 1 || maddr > len(ed.Lines) {
+			if maddr < 1 || maddr > len(ed.lines) {
 				return -1, ErrInvalidAddress
 			}
 			addr = maddr
@@ -155,7 +158,7 @@ func (ed *Editor) nextAddress() (int, error) {
 				}
 				ed.token()
 				if addr, err = ed.nextAddress(); err != nil {
-					addr = len(ed.Lines)
+					addr = len(ed.lines)
 				}
 			}
 			fallthrough
@@ -163,7 +166,7 @@ func (ed *Editor) nextAddress() (int, error) {
 			if ed.tok == starttok {
 				return -1, io.EOF
 			}
-			if addr < 0 || addr > len(ed.Lines) {
+			if addr < 0 || addr > len(ed.lines) {
 				ed.addrc++
 				return -1, ErrInvalidAddress
 			}
@@ -172,15 +175,15 @@ func (ed *Editor) nextAddress() (int, error) {
 	}
 }
 
-// check validates if n, m are valid depending on how many addresses were
-// previously parsed. check returns error "invalid address" if the
-// positions are out of bounds.
+// check validates if n, m are valid depending on how many addresses
+// were previously parsed. check returns error "invalid address" if
+// the positions are out of bounds.
 func (ed *Editor) check(n, m int) error {
 	if ed.addrc == 0 {
 		ed.start = n
 		ed.end = m
 	}
-	if ed.start > ed.end || ed.start < 1 || ed.end > len(ed.Lines) {
+	if ed.start > ed.end || ed.start < 1 || ed.end > len(ed.lines) {
 		return ErrInvalidAddress
 	}
 	return nil

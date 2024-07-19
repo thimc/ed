@@ -23,8 +23,8 @@ var dummyFile = []string{
 
 // setupMemoryFile initializes a in-memory buffer
 func setupMemoryFile(ed *Editor, buf []string) {
-	ed.Lines = make([]string, len(buf))
-	copy(ed.Lines, buf)
+	ed.lines = make([]string, len(buf))
+	copy(ed.lines, buf)
 	ed.path = "test"
 	ed.dot = len(buf)
 	ed.start = ed.dot
@@ -33,7 +33,7 @@ func setupMemoryFile(ed *Editor, buf []string) {
 }
 
 func resetEditor(ed *Editor) {
-	ed.Lines = []string{}
+	ed.lines = []string{}
 	ed.path = ""
 	ed.start = 0
 	ed.end = 0

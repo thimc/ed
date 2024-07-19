@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	// The default value of the user prompt which can be overriden.
+	// The default value of the user prompt which can be overriden with
+	// the `P` command.
 	DefaultPrompt = "*"
 	// The default file name for when the editor receives a SIGHUP which
 	// causes ed to dump all the contents of the buffer to the hangup file.
@@ -37,6 +38,8 @@ type undoAction struct {
 	lines []string
 }
 
+// Ed is limited to displaying these error messages with the exception
+// of regular expression errors.
 var (
 	ErrDefault             = errors.New("?") // descriptive error message, don't you think?
 	ErrCryptUnavailable    = errors.New("crypt unavailable")
@@ -69,19 +72,20 @@ var (
 	ErrZero                = errors.New("0")
 )
 
+// position contains the cursor positions used by ed.
 type position struct {
 	start, end, dot, addrc int
 }
 
 // Editor contains the internal data structures needed for ed.
 type Editor struct {
-	position   // cursors
+	position
 	*tokenizer // user input
 
-	path     string
+	path     string // full path to file
 	modified bool
 	scripted bool
-	Lines    []string
+	lines    []string
 	mark     [25]int // a to z
 
 	cs cmdSuffix // command suffix
@@ -128,7 +132,7 @@ func New(opts ...OptionFunc) *Editor {
 	go func() {
 		for range ed.sighupch {
 			if ed.modified {
-				ed.writeFile(DefaultHangupFile, 'w', 1, len(ed.Lines))
+				ed.writeFile(DefaultHangupFile, 'w', 1, len(ed.lines))
 			}
 			ed.error = ErrInterrupt
 		}
@@ -184,8 +188,8 @@ func WithFile(path string) OptionFunc {
 
 // WithScripted overrides the default silent mode of the editor. This mode
 // is meant to be used with ed scripts.
-// TODO(thimc): Ed scripts are probably not fully supported yet.
 func WithScripted(b bool) OptionFunc {
+	// TODO(thimc): Ed scripts are probably not fully supported yet.
 	return func(ed *Editor) {
 		ed.scripted = b
 	}

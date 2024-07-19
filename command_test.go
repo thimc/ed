@@ -45,8 +45,8 @@ func TestCmdAppend(t *testing.T) {
 			if !reflect.DeepEqual(tt.expect, got) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
-			if !reflect.DeepEqual(tt.expectedBuffer, ted.Lines) {
-				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.Lines)
+			if !reflect.DeepEqual(tt.expectedBuffer, ted.lines) {
+				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.lines)
 			}
 		})
 	}
@@ -84,8 +84,8 @@ func TestCmdChange(t *testing.T) {
 			if !reflect.DeepEqual(tt.expect, got) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
-			if !reflect.DeepEqual(tt.expectedBuffer, ted.Lines) {
-				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.Lines)
+			if !reflect.DeepEqual(tt.expectedBuffer, ted.lines) {
+				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.lines)
 			}
 		})
 	}
@@ -129,8 +129,8 @@ func TestCmdDelete(t *testing.T) {
 			if !reflect.DeepEqual(tt.expect, got) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
-			if !reflect.DeepEqual(tt.expectedBuffer, ted.Lines) {
-				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.Lines)
+			if !reflect.DeepEqual(tt.expectedBuffer, ted.lines) {
+				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.lines)
 			}
 		})
 	}
@@ -203,8 +203,8 @@ func TestCmdEdit(t *testing.T) {
 			if !reflect.DeepEqual(tt.expect, got) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
-			if !reflect.DeepEqual(tt.expectedBuffer, ted.Lines) {
-				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.Lines)
+			if !reflect.DeepEqual(tt.expectedBuffer, ted.lines) {
+				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.lines)
 			}
 			if b.String() != tt.expectedOutput {
 				t.Fatalf("expected output %q, got %q", tt.expectedOutput, b.String())
@@ -332,8 +332,8 @@ func TestCmdGlobal(t *testing.T) {
 			if !reflect.DeepEqual(tt.expect, got) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
-			if !reflect.DeepEqual(tt.expectedBuffer, ted.Lines) {
-				t.Fatalf("expected %q, got %q", tt.expectedBuffer, ted.Lines)
+			if !reflect.DeepEqual(tt.expectedBuffer, ted.lines) {
+				t.Fatalf("expected %q, got %q", tt.expectedBuffer, ted.lines)
 			}
 		})
 	}
@@ -414,8 +414,8 @@ func TestCmdInsert(t *testing.T) {
 			if !reflect.DeepEqual(tt.expect, got) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
-			if !reflect.DeepEqual(tt.expectedBuffer, ted.Lines) {
-				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.Lines)
+			if !reflect.DeepEqual(tt.expectedBuffer, ted.lines) {
+				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.lines)
 			}
 		})
 	}
@@ -464,8 +464,8 @@ func TestCmdJoin(t *testing.T) {
 			if !reflect.DeepEqual(tt.expect, got) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
-			if !reflect.DeepEqual(tt.expectedBuffer, ted.Lines) {
-				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.Lines)
+			if !reflect.DeepEqual(tt.expectedBuffer, ted.lines) {
+				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.lines)
 			}
 		})
 	}
@@ -607,8 +607,8 @@ func TestCmdMove(t *testing.T) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
 			expect := strings.Split(tt.expectedBuffer, "\n")
-			if !reflect.DeepEqual(ted.Lines, expect) {
-				t.Fatalf("expected buffer %q, got %q", expect, ted.Lines)
+			if !reflect.DeepEqual(ted.lines, expect) {
+				t.Fatalf("expected buffer %q, got %q", expect, ted.lines)
 			}
 		})
 	}
@@ -685,8 +685,8 @@ func TestCmdRead(t *testing.T) {
 			if b.String() != tt.output {
 				t.Fatalf("expected output %q, got %q", tt.output, b.String())
 			}
-			if !reflect.DeepEqual(tt.buffer, ted.Lines) {
-				t.Fatalf("expected buffer: %q, got %q", tt.buffer, ted.Lines)
+			if !reflect.DeepEqual(tt.buffer, ted.lines) {
+				t.Fatalf("expected buffer: %q, got %q", tt.buffer, ted.lines)
 			}
 		})
 	}
@@ -801,8 +801,8 @@ func TestCmdSubstitute(t *testing.T) {
 			if !reflect.DeepEqual(tt.expect, got) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
-			if !reflect.DeepEqual(tt.expectedBuffer, ted.Lines) {
-				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.Lines)
+			if !reflect.DeepEqual(tt.expectedBuffer, ted.lines) {
+				t.Fatalf("expected buffer: %q, got %q", tt.expectedBuffer, ted.lines)
 			}
 			if b.String() != tt.expectedOutput {
 				t.Fatalf("expected output: %q, got %q", tt.expectedOutput, b.String())
@@ -903,8 +903,8 @@ func TestCmdTransfer(t *testing.T) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
 			expect := strings.Split(tt.expectedBuffer, "\n")
-			if !reflect.DeepEqual(ted.Lines, expect) {
-				t.Fatalf("expected buffer %q, got %q", expect, ted.Lines)
+			if !reflect.DeepEqual(ted.lines, expect) {
+				t.Fatalf("expected buffer %q, got %q", expect, ted.lines)
 			}
 		})
 	}
@@ -995,8 +995,8 @@ func TestCmdUndo(t *testing.T) {
 			if !reflect.DeepEqual(tt.expect, got) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
-			if !reflect.DeepEqual(ted.Lines, dummyFile) {
-				t.Errorf("expected buffer %q, got %q", dummyFile, ted.Lines)
+			if !reflect.DeepEqual(ted.lines, dummyFile) {
+				t.Errorf("expected buffer %q, got %q", dummyFile, ted.lines)
 			}
 			if b.String() != tt.expectedOutput {
 				t.Errorf("expected output %q, got %q", tt.expectedOutput, b.String())

@@ -63,8 +63,8 @@ func TestSignalSIGINT(t *testing.T) {
 	}
 	select {
 	case <-time.After(500 * time.Millisecond):
-		if reflect.DeepEqual(ted.Lines, expected) {
-			t.Fatalf("expected buffer to be %q, got %q", expected, ted.Lines)
+		if reflect.DeepEqual(ted.lines, expected) {
+			t.Fatalf("expected buffer to be %q, got %q", expected, ted.lines)
 		}
 		if ted.error != ErrInterrupt {
 			t.Fatalf("expected error %q, got %q", ErrInterrupt, ted.error)
