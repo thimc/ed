@@ -73,10 +73,6 @@ type position struct {
 	start, end, dot, addrc int
 }
 
-func (p *position) String() string {
-	return fmt.Sprintf("start=%d, end=%d, dot=%d, addrc=%d", p.start, p.end, p.dot, p.addrc)
-}
-
 // Editor contains the internal data structures needed for ed.
 type Editor struct {
 	position   // cursors
