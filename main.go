@@ -28,21 +28,25 @@ import (
 )
 
 var (
-	// Prompt sets the user Prompt and implicitly enables the Prompt option.
-	Prompt = flag.String("p", "", "user prompt")
-	// Scripted surpresses diagnostics and should be if ed is used in scripts.
-	Scripted = flag.Bool("s", false, "suppress diagnostics")
+	// prompt sets the user prompt and implicitly enables the prompt option.
+	prompt = flag.String("p", "", "user prompt")
+	// scripted surpresses diagnostics and should be if ed is used in scripts.
+	scripted = flag.Bool("s", false, "suppress diagnostics")
 )
 
 func main() {
 	flag.Parse()
 	var (
-		args    = flag.Args()
-		options = []OptionFunc{WithPrompt(*Prompt), WithScripted(*Scripted)}
+		args    = os.Args[1:]
+		options = []OptionFunc{WithPrompt(*prompt), WithScripted(*scripted)}
 	)
-	// TODO(thimc): Add support for the (deprecated) `-` flag
-	// as an alternative way to enable scripted mode.
-	if len(flag.Args()) == 1 {
+	for n, arg := range args {
+		if arg == "-" {
+			*scripted = true
+			args = append(args[:n], args[n+1:]...)
+		}
+	}
+	if len(args) == 1 {
 		options = append(options, WithFile(args[0]))
 	}
 	for ed := New(options...); ; {
