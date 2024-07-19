@@ -31,21 +31,34 @@ const (
 	subLastRegex                       // r
 )
 
+// getCmdSuffix extracts a command suffix which modifies the behaviour
+// of the original command.
 func (ed *Editor) getCmdSuffix() error {
-loop:
-	switch ed.tok {
-	case 'p':
-		ed.cs |= cmdSuffixPrint
-		ed.token()
-		goto loop
-	case 'l':
-		ed.cs |= cmdSuffixList
-		ed.token()
-		goto loop
-	case 'n':
-		ed.cs |= cmdSuffixNumber
-		ed.token()
-		goto loop
+	for {
+		var found bool
+	loop:
+		switch ed.tok {
+		case 'p':
+			ed.cs |= cmdSuffixPrint
+			ed.token()
+			found = true
+			goto loop
+		case 'l':
+			ed.cs |= cmdSuffixList
+			ed.token()
+			found = true
+			goto loop
+		case 'n':
+			ed.cs |= cmdSuffixNumber
+			ed.token()
+			found = true
+			goto loop
+		default:
+			found = true
+		}
+		if found {
+			break
+		}
 	}
 	if ed.tok != '\n' {
 		return ErrInvalidCmdSuffix
@@ -99,6 +112,8 @@ func (ed *Editor) undo() (err error) {
 	return nil
 }
 
+// global executes a command sequence globally. The start and end
+// positions are set to the dot.
 func (ed *Editor) global(r rune) error {
 	var (
 		interactive = (r == 'G' || r == 'V')
@@ -198,6 +213,9 @@ func (ed *Editor) global(r rune) error {
 	return nil
 }
 
+// deleteLines deletes the addressed lines from the buffer. The dot is
+// set to the line after the range if one exists, otherwise it is set to
+// the line before the range.
 func (ed *Editor) deleteLines(start, end int, action *[]undoAction) error {
 	undolines := make([]string, end-start+1)
 	copy(undolines, ed.Lines[start-1:end])
@@ -509,13 +527,16 @@ func (ed *Editor) do() (err error) {
 		var path string
 		if ed.addrc > 0 {
 			return ErrUnexpectedAddress
-		} else if !unicode.IsSpace(ed.tok) && ed.tok != 0x4 {
+		} else if !unicode.IsSpace(ed.tok) {
 			return ErrUnexpectedCmdSuffix
-		} else if path = ed.scanString(); path == "" {
+		}
+		if path = ed.scanString(); path == "" {
 			if ed.path == "" {
 				return ErrNoFileName
 			}
+			path = ed.path
 		}
+
 		if path[0] == ' ' {
 			path = path[1:]
 		}
@@ -868,13 +889,18 @@ func (ed *Editor) do() (err error) {
 		var n int
 		if err := ed.check(ed.start, ed.dot+1); err != nil {
 			return err
-		} else if ed.tok > '0' && ed.tok <= '9' {
+		} else if unicode.IsDigit(ed.tok) {
+			var s string
+			for unicode.IsDigit(ed.tok) {
+				s += string(ed.tok)
+				ed.token()
+			}
 			var err error
-			n, err = strconv.Atoi(string(ed.tok))
+			n, err = strconv.Atoi(s)
 			if err != nil {
 				return ErrNumberOutOfRange
 			}
-			ed.token()
+			// ed.token()
 		}
 		if err := ed.getCmdSuffix(); err != nil {
 			return err
@@ -895,6 +921,9 @@ func (ed *Editor) do() (err error) {
 		ed.token()
 		if ed.addrc > 0 {
 			return ErrUnexpectedAddress
+		}
+		if ed.tok == EOF || ed.tok == '\n' {
+			return ErrNoCmd
 		}
 		ed.skipWhitespace()
 		var cmd = ed.scanString()

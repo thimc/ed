@@ -106,6 +106,12 @@ func TestCmdDelete(t *testing.T) {
 			expectedBuffer: []string{"A", "E", "F"},
 			expect:         position{start: 2, end: 4, dot: 2, addrc: 2},
 		},
+		{
+			cmd:            "3,d\n",
+			buffer:         []string{"A", "B", "C", "D", "E", "F"},
+			expectedBuffer: []string{"A", "B", "D", "E", "F"},
+			expect:         position{start: 3, end: 3, dot: 3, addrc: 1},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.cmd), func(t *testing.T) {
@@ -139,6 +145,7 @@ func TestCmdEdit(t *testing.T) {
 	tests := []struct {
 		cmd            string
 		expect         position
+		buffer         []string
 		expectedBuffer []string
 		expectedOutput string
 		err            error
@@ -146,23 +153,27 @@ func TestCmdEdit(t *testing.T) {
 		{
 			cmd:            "e !ls ed.go\n",
 			expect:         position{start: 0, end: 0, dot: 1, addrc: 0},
+			buffer:         nil,
 			expectedBuffer: []string{"ed.go"},
 			expectedOutput: "6\n",
 		},
 		{
 			cmd:            "e " + path + "\n",
 			expect:         position{start: 0, end: 0, dot: len(dummyFile), addrc: 0},
+			buffer:         nil,
 			expectedBuffer: dummyFile,
 			expectedOutput: "52\n",
 		},
 		{
 			cmd:            "5e\n",
-			expect:         position{start: 0, end: 0, dot: 0, addrc: 1},
-			expectedBuffer: nil,
+			expect:         position{start: 5, end: 5, dot: len(dummyFile), addrc: 1},
+			buffer:         dummyFile,
+			expectedBuffer: dummyFile,
 			err:            ErrUnexpectedAddress,
 		},
 		{
 			cmd:            "e\n",
+			buffer:         nil,
 			expectedBuffer: nil,
 			err:            ErrNoFileName,
 		},
@@ -174,6 +185,9 @@ func TestCmdEdit(t *testing.T) {
 				ted = New(WithStdin(strings.NewReader(tt.cmd)), WithStdout(&b), WithStderr(&b))
 			)
 			ted.printErrors = true
+			if tt.buffer != nil {
+				setupMemoryFile(ted, tt.buffer)
+			}
 			if err := ted.Do(); err != tt.err {
 				if tt.err != nil {
 					t.Fatalf("expected error %q, got %q", tt.err, err)
@@ -208,28 +222,31 @@ func TestCmdFile(t *testing.T) {
 	tests := []struct {
 		cmd              string
 		err              error
+		filename         string
 		expectedFilename string
 		expectedOutput   string
 	}{
 		{
 			cmd:              "f filename",
+			filename:         "dummy",
 			expectedFilename: "filename",
 			expectedOutput:   "filename\n",
 		},
 		{
-			cmd: "f",
-			err: ErrNoFileName,
+			cmd:      "f\n",
+			filename: "",
+			err:      ErrNoFileName,
 		},
 		{
-			cmd: "2f",
+			cmd: "2f\n",
 			err: ErrUnexpectedAddress,
 		},
 		{
-			cmd: "f !ls",
+			cmd: "f !ls\n",
 			err: ErrInvalidRedirection,
 		},
 		{
-			cmd: "f!",
+			cmd: "f!\n",
 			err: ErrUnexpectedCmdSuffix,
 		},
 	}
@@ -240,6 +257,8 @@ func TestCmdFile(t *testing.T) {
 				ted = New(WithStdin(strings.NewReader(tt.cmd)), WithStdout(&b), WithStderr(&b))
 			)
 			ted.printErrors = true
+			setupMemoryFile(ted, dummyFile)
+			ted.path = tt.filename
 			if err := ted.Do(); err != tt.err {
 				if tt.err != nil {
 					t.Fatalf("expected error %q, got %q", tt.err, err)
@@ -326,6 +345,7 @@ func TestCmdHelp(t *testing.T) {
 		expect = ErrNoFileName
 	)
 	ted.printErrors = true
+	setupMemoryFile(ted, dummyFile)
 	expect = ErrUnexpectedAddress
 	if err := ted.Do(); err != expect {
 		t.Fatalf("expected error %q, got %q", expect, err)
@@ -351,8 +371,8 @@ func TestCmdHelpToggle(t *testing.T) {
 	if err := ted.Do(); err != expect {
 		t.Fatalf("expected error %q, got %q", expect, err)
 	}
-
-	ted.in = strings.NewReader("H\n")
+	setupMemoryFile(ted, dummyFile)
+	ted.in = strings.NewReader("5H\n")
 	expect = ErrUnexpectedAddress
 	if err := ted.Do(); err != expect {
 		t.Fatalf("expected error %q, got %q", expect, err)
@@ -594,6 +614,35 @@ func TestCmdMove(t *testing.T) {
 	}
 }
 
+func TestCmdPrompt(t *testing.T) {
+	var (
+		b   bytes.Buffer
+		ted = New(WithStdout(&b), WithStderr(&b))
+	)
+	setupMemoryFile(ted, dummyFile)
+	ted.in = strings.NewReader("P#\n")
+	if err := ted.Do(); err != ErrInvalidCmdSuffix {
+		t.Fatalf("expected error %q, got %q", ErrInvalidCmdSuffix, err)
+	}
+	ted.in = strings.NewReader("Pp\n")
+	if err := ted.Do(); err != nil {
+		t.Fatalf("expected no error, got %q", err)
+	}
+	expect := dummyFile[len(dummyFile)-1] + "\n"
+	if b.String() != expect {
+		t.Fatalf("expected output %q, got %q", expect, b.String())
+	}
+	expect = DefaultPrompt
+	if ted.prompt != expect {
+		t.Fatalf("expected the prompt to be %q, got %q", expect, ted.prompt)
+	}
+}
+
+func TestCmdQuit(t *testing.T) {
+	// TODO(thimc): Add tests for the 'Q' and 'q' commands.
+	t.Skip()
+}
+
 func TestCmdRead(t *testing.T) {
 	var (
 		b    bytes.Buffer
@@ -605,25 +654,64 @@ func TestCmdRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Remove(path)
-	ted.in = strings.NewReader("r")
-	if err := ted.Do(); err != ErrUnexpectedCmdSuffix {
-		t.Fatalf("expected %q, got %q", ErrUnexpectedCmdSuffix, err)
+
+	tests := []struct {
+		cmd    string
+		buffer []string
+		output string
+		err    error
+	}{
+		{
+			cmd: "r#\n",
+			err: ErrUnexpectedCmdSuffix,
+		},
+		{
+			cmd: "r\n",
+			err: ErrNoFileName,
+		},
+		{
+			cmd:    "r " + path + "\n",
+			buffer: dummyFile,
+			output: fmt.Sprint(len(dummyFile)*2) + "\n",
+		},
 	}
-	ted.in = strings.NewReader("r\n")
-	if err := ted.Do(); err != ErrNoFileName {
-		t.Fatalf("expected %q, got %q", ErrNoFileName, err)
+	for _, tt := range tests {
+		t.Run(tt.cmd, func(t *testing.T) {
+			b.Reset()
+			ted.in = strings.NewReader(tt.cmd)
+			if err := ted.Do(); err != tt.err {
+				t.Fatalf("expected error %q, got %q", tt.err, err)
+			}
+			if b.String() != tt.output {
+				t.Fatalf("expected output %q, got %q", tt.output, b.String())
+			}
+			if !reflect.DeepEqual(tt.buffer, ted.Lines) {
+				t.Fatalf("expected buffer: %q, got %q", tt.buffer, ted.Lines)
+			}
+		})
 	}
-	b.Reset()
-	ted.in = strings.NewReader("r " + path + "\n")
-	if err := ted.Do(); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(dummyFile, ted.Lines) {
-		t.Fatalf("expected buffer: %q, got %q", dummyFile, ted.Lines)
-	}
+
+	// ted.in = strings.NewReader("r")
+	// if err := ted.Do(); err != ErrUnexpectedCmdSuffix {
+	// 	t.Fatalf("expected %q, got %q", ErrUnexpectedCmdSuffix, err)
+	// }
+	// ted.in = strings.NewReader("r\n")
+	// if err := ted.Do(); err != ErrNoFileName {
+	// 	t.Fatalf("expected %q, got %q", ErrNoFileName, err)
+	// }
+	// b.Reset()
+	// ted.in = strings.NewReader("r " + path + "\n")
+	// if err := ted.Do(); err != nil {
+	// 	t.Fatal(err)
+	// }
 }
 
 func TestCmdSubstitute(t *testing.T) {
+	// TODO(thimc): Add tests cases for the the substitute command
+	// with `r`, `p`, `l` and `n` command suffixes.
+	// TODO(thimc): Add tests cases for the substitute command but
+	// reusing the last search criteria and `%` (last replacement
+	// string) as replacement text.
 	var (
 		b   bytes.Buffer
 		buf = []string{
@@ -676,7 +764,6 @@ func TestCmdSubstitute(t *testing.T) {
 			expectedBuffer: []string{"A A AX A A", "A A A A A", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
 			expect:         position{start: 1, end: 1, dot: 1, addrc: 1},
 		},
-
 		{
 			cmd:            ",s/X/Y/g\n",
 			expectedBuffer: buf,
@@ -735,6 +822,7 @@ func TestCmdScroll(t *testing.T) {
 		init           position
 		expect         position
 		expectedOutput string
+		err            error
 	}{
 		{
 			cmd:            "2z6\n",
@@ -743,6 +831,13 @@ func TestCmdScroll(t *testing.T) {
 			expect:         position{start: 1, end: 2, dot: 8, addrc: 1},
 			expectedOutput: strings.Join(dummyFile[1:8], "\n") + "\n",
 		},
+		{
+			cmd:    "2z1234567891011121314151617181920\n",
+			buffer: dummyFile,
+			init:   position{start: len(dummyFile), end: len(dummyFile), dot: len(dummyFile)},
+			expect: position{start: 1, end: 2, dot: len(dummyFile), addrc: 1},
+			err:    ErrNumberOutOfRange,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.cmd, func(t *testing.T) {
@@ -750,8 +845,8 @@ func TestCmdScroll(t *testing.T) {
 			setupMemoryFile(ted, tt.buffer)
 			setPosition(ted, tt.init)
 			ted.in = strings.NewReader(tt.cmd)
-			if err := ted.Do(); err != nil {
-				t.Errorf("expected no error, got %q", err)
+			if err := ted.Do(); err != tt.err {
+				t.Errorf("expected error %q, got %q", tt.err, err)
 			}
 			got := position{
 				start: ted.start,
@@ -815,7 +910,105 @@ func TestCmdTransfer(t *testing.T) {
 	}
 }
 
+func TestCmdUndo(t *testing.T) {
+	var (
+		buffer = dummyFile
+		last   = len(buffer)
+	)
+	tests := []struct {
+		cmds           []string
+		init           position
+		expect         position
+		expectedOutput string
+		err            error
+	}{
+		{
+			cmds:   []string{",d\n", "u\n"},
+			init:   position{start: last, end: last, dot: last},
+			expect: position{start: 1, end: 1, dot: last},
+		},
+		{
+			cmds:   []string{"2,4d\n", "u\n"},
+			init:   position{start: last, end: last, dot: last},
+			expect: position{start: 2, end: 2, dot: last},
+		},
+		{
+			cmds:   []string{"1d\n", "u\n"},
+			init:   position{start: last, end: last, dot: last},
+			expect: position{start: 1, end: 1, dot: last},
+		},
+		{
+			cmds:   []string{"2,3c\ntest\n.", "u\n"},
+			init:   position{start: last, end: last, dot: last},
+			expect: position{start: 2, end: 2, dot: last},
+		},
+		{
+			cmds:   []string{"4,9j\n", "u\n"},
+			init:   position{start: last, end: last, dot: last},
+			expect: position{start: 4, end: 4, dot: last},
+		},
+		{
+			cmds:   []string{"3,5m10\n", "u\n"},
+			init:   position{start: last, end: last, dot: last},
+			expect: position{start: 10, end: 10, dot: last},
+		},
+		{
+			cmds:   []string{"2,6t12\n", "u\n"},
+			init:   position{start: last, end: last, dot: last},
+			expect: position{start: 17, end: 17, dot: last},
+		},
+		{
+			cmds:   []string{",s/D/test\n", "u\n"},
+			init:   position{start: last, end: last, dot: last},
+			expect: position{start: 4, end: 4, dot: last},
+		},
+		{
+			cmds:   []string{"5u\n"},
+			expect: position{start: 5, end: 5, dot: 0, addrc: 1},
+			err:    ErrUnexpectedAddress,
+		},
+		{
+			cmds: []string{"u\n"},
+			err:  ErrNothingToUndo,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(strings.Join(tt.cmds, "\n"), func(t *testing.T) {
+			var (
+				b   bytes.Buffer
+				ted = New(WithStdout(&b), WithStderr(&b))
+			)
+			setupMemoryFile(ted, buffer)
+			setPosition(ted, tt.init)
+			for _, cmd := range tt.cmds {
+				ted.in = strings.NewReader(cmd)
+				if err := ted.Do(); err != tt.err {
+					t.Errorf("expected error %q, got %q", tt.err, err)
+				}
+			}
+			got := position{
+				start: ted.start,
+				end:   ted.end,
+				dot:   ted.dot,
+				addrc: ted.addrc,
+			}
+			if !reflect.DeepEqual(tt.expect, got) {
+				t.Errorf("expected %+v, got %+v", tt.expect, got)
+			}
+			if !reflect.DeepEqual(ted.Lines, dummyFile) {
+				t.Errorf("expected buffer %q, got %q", dummyFile, ted.Lines)
+			}
+			if b.String() != tt.expectedOutput {
+				t.Errorf("expected output %q, got %q", tt.expectedOutput, b.String())
+			}
+		})
+	}
+}
+
 func TestCmdWrite(t *testing.T) {
+	// TODO(thimc): Add test cases for the write command with an
+	// unexpected command suffix and a test where no path is provided.
+	// Also add tests for 'wq' and 'Wq'.
 	var (
 		b    bytes.Buffer
 		ted  = New(WithStdout(&b), WithStderr(&b))
@@ -878,7 +1071,6 @@ func TestCmdWrite(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestCmdEncrypt(t *testing.T) {
@@ -886,97 +1078,153 @@ func TestCmdEncrypt(t *testing.T) {
 		b   bytes.Buffer
 		ted = New(WithStdout(&b), WithStderr(&b))
 	)
+	setupMemoryFile(ted, dummyFile)
 	ted.printErrors = true
-	ted.in = strings.NewReader("1x\n")
-	if err := ted.Do(); err != ErrUnexpectedAddress {
-		t.Fatalf("expected error %q, got %q", ErrUnexpectedAddress, err)
-	}
-	ted.in = strings.NewReader("x\n")
-	if err := ted.Do(); err != ErrCryptUnavailable {
-		t.Fatalf("expected error %q, got %q", ErrCryptUnavailable, err)
-	}
-}
-
-func TestCmdUndo(t *testing.T) {
-	var (
-		buffer = dummyFile
-		last   = len(buffer)
-	)
 	tests := []struct {
-		cmds           []string
-		init           position
-		expect         position
-		expectedOutput string
+		cmd string
+		err error
 	}{
 		{
-			cmds:   []string{",d\n", "u\n"},
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 1, end: 1, dot: last},
+			cmd: "1x\n",
+			err: ErrUnexpectedAddress,
 		},
 		{
-			cmds:   []string{"2,4d\n", "u\n"},
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 2, end: 2, dot: last},
+			cmd: "x#\n",
+			err: ErrInvalidCmdSuffix,
 		},
 		{
-			cmds:   []string{"1d\n", "u\n"},
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 1, end: 1, dot: last},
-		},
-		{
-			cmds:   []string{"2,3c\ntest\n.", "u\n"},
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 2, end: 2, dot: last},
-		},
-		{
-			cmds:   []string{"4,9j\n", "u\n"},
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 4, end: 4, dot: last},
-		},
-		{
-			cmds:   []string{"3,5m10\n", "u\n"},
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 10, end: 10, dot: last},
-		},
-		{
-			cmds:   []string{"2,6t12\n", "u\n"},
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 17, end: 17, dot: last},
-		},
-		{
-			cmds:   []string{",s/D/test\n", "u\n"},
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 4, end: 4, dot: last},
+			cmd: "x\n",
+			err: ErrCryptUnavailable,
 		},
 	}
 	for _, tt := range tests {
-		t.Run(strings.Join(tt.cmds, "\n"), func(t *testing.T) {
-			var (
-				b   bytes.Buffer
-				ted = New(WithStdout(&b), WithStderr(&b))
-			)
-			setupMemoryFile(ted, buffer)
+		t.Run(tt.cmd, func(t *testing.T) {
+			ted.in = strings.NewReader(tt.cmd)
+			if err := ted.Do(); err != tt.err {
+				t.Fatalf("expected error %q, got %q", tt.err, err)
+			}
+		})
+	}
+}
+
+func TestCmdLineNumber(t *testing.T) {
+	var (
+		b    bytes.Buffer
+		ted  = New(WithStdout(&b), WithStderr(&b))
+		last = len(dummyFile)
+	)
+	setupMemoryFile(ted, dummyFile)
+	ted.printErrors = true
+	tests := []struct {
+		cmd    string
+		init   position
+		output string
+		err    error
+	}{
+		{
+			cmd:    "=\n",
+			init:   position{start: last, end: last, dot: last},
+			output: fmt.Sprint(last) + "\n",
+		},
+		{
+			cmd:    "=l\n",
+			init:   position{start: last, end: last, dot: last},
+			output: fmt.Sprint(last) + "$\n",
+		},
+		{
+			cmd:    "=p\n",
+			init:   position{start: last, end: last, dot: last, addrc: 2},
+			output: fmt.Sprint(last) + "\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.cmd, func(t *testing.T) {
+			b.Reset()
 			setPosition(ted, tt.init)
-			for _, cmd := range tt.cmds {
-				ted.in = strings.NewReader(cmd)
-				if err := ted.Do(); err != nil {
-					t.Errorf("expected no error, got %q", err)
-				}
+			ted.in = strings.NewReader(tt.cmd)
+			if err := ted.Do(); err != tt.err {
+				t.Fatalf("expected error %q, got %q", tt.err, err)
 			}
-			got := position{
-				start: ted.start,
-				end:   ted.end,
-				dot:   ted.dot,
-				addrc: ted.addrc,
+			if b.String() != tt.output {
+				t.Fatalf("expected output %q, got %q", tt.output, b.String())
 			}
-			if !reflect.DeepEqual(tt.expect, got) {
-				t.Errorf("expected %+v, got %+v", tt.expect, got)
+		})
+	}
+}
+
+func TestCmdExecute(t *testing.T) {
+	var (
+		b   bytes.Buffer
+		ted = New(WithStdout(&b), WithStderr(&b))
+	)
+	setupMemoryFile(ted, dummyFile)
+	ted.printErrors = true
+	tests := []struct {
+		cmd    string
+		output string
+		err    error
+	}{
+		{
+			cmd:    "! ls command.go\n",
+			output: "command.go\n!\n",
+		},
+		{
+			cmd: "15!\n",
+			err: ErrUnexpectedAddress,
+		},
+		{
+			cmd: "!\n",
+			err: ErrNoCmd,
+		},
+		{
+			cmd: "!!\n",
+			err: ErrNoPreviousCmd,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.cmd, func(t *testing.T) {
+			b.Reset()
+			ted.in = strings.NewReader(tt.cmd)
+			if err := ted.Do(); err != tt.err {
+				t.Fatalf("expected error %q, got %q", tt.err, err)
 			}
-			if !reflect.DeepEqual(ted.Lines, dummyFile) {
-				t.Errorf("expected buffer %q, got %q", dummyFile, ted.Lines)
+			if b.String() != tt.output {
+				t.Fatalf("expected output %q, got %q", tt.output, b.String())
 			}
-			if b.String() != tt.expectedOutput {
-				t.Errorf("expected output %q, got %q", tt.expectedOutput, b.String())
+		})
+	}
+}
+
+func TestCmdNone(t *testing.T) {
+	tests := []struct {
+		cmd    string
+		output string
+		err    error
+	}{
+		{
+			cmd:    "10\n",
+			output: dummyFile[9] + "\n",
+			err:    nil,
+		},
+		{
+			cmd: "999\n",
+			err: ErrInvalidAddress,
+		},
+	}
+	for _, tt := range tests {
+		var (
+			b   bytes.Buffer
+			ted = New(WithStdout(&b), WithStderr(&b))
+		)
+		ted.printErrors = true
+		setupMemoryFile(ted, dummyFile)
+		t.Run(tt.cmd, func(t *testing.T) {
+			ted.in = strings.NewReader(tt.cmd)
+			if err := ted.Do(); err != tt.err {
+				t.Fatalf("expected error %q, got %q", tt.err, err)
+			}
+			if b.String() != tt.output {
+				t.Fatalf("expected output %q, got %q", tt.output, b.String())
 			}
 		})
 	}

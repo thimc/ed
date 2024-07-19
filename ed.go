@@ -203,7 +203,7 @@ func (ed *Editor) Do() error {
 	}
 	ed.tokenizer = newTokenizer(ed.in)
 	ed.token()
-	if err := ed.parse(); err != nil && ed.tok == EOF {
+	if err := ed.parse(); err != nil {
 		ed.error = err
 		if !ed.printErrors {
 			return ErrDefault
