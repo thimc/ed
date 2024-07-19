@@ -3,20 +3,435 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
-	"text/scanner"
 	"unicode"
 )
 
-// doCommand executes a command on a range defined by start and end.
-func (ed *Editor) doCommand() (err error) {
+// cmdSuffix is a bitmask for most commands which modifies the way the
+// command handles the last line. It can print, list or enumerate it.
+type cmdSuffix uint8
+
+const (
+	cmdSuffixPrint  cmdSuffix = 1 << iota // p
+	cmdSuffixList                         // l
+	cmdSuffixNumber                       // n
+)
+
+// subSuffix is a bitmask for the substitute command.
+type subSuffix uint8
+
+const (
+	subGlobal    subSuffix = 1 << iota // g
+	subNth                             // 0...9
+	subPrint                           // p
+	subLastRegex                       // r
+)
+
+func (ed *Editor) getCmdSuffix() error {
+loop:
+	switch ed.tok {
+	case 'p':
+		ed.cs |= cmdSuffixPrint
+		ed.token()
+		goto loop
+	case 'l':
+		ed.cs |= cmdSuffixList
+		ed.token()
+		goto loop
+	case 'n':
+		ed.cs |= cmdSuffixNumber
+		ed.token()
+		goto loop
+	}
+	if ed.tok != '\n' {
+		return ErrInvalidCmdSuffix
+	}
+	return nil
+}
+
+// getThirdAddress extracts the third legal address used by the `move`
+// and `transfer` commands.
+func (ed *Editor) getThirdAddress() (int, error) {
+	var start, end = ed.start, ed.end
+	if err := ed.parse(); err != nil {
+		return -1, err
+	} else if ed.addrc == 0 {
+		return -1, ErrDestinationExpected
+	} else if ed.end < 0 || ed.end > len(ed.Lines) {
+		return -1, ErrInvalidAddress
+	}
+	var addr = ed.end
+	ed.start = start
+	ed.end = end
+	return addr, nil
+}
+
+// undo undoes the last command and restores the current address
+// to what it was before the last command.
+func (ed *Editor) undo() (err error) {
+	// TODO(thimc): Undo 'u' is its own inverse so it should push an
+	// inverse action of whatever the action is.
+	if len(ed.undohist) < 1 {
+		return ErrNothingToUndo
+	}
+	var operation = ed.undohist[len(ed.undohist)-1]
+	ed.undohist = ed.undohist[:len(ed.undohist)-1]
+	for n := len(operation) - 1; n >= 0; n-- {
+		var (
+			op     = operation[n]
+			before = ed.Lines[:op.start-1]
+			after  = ed.Lines[op.start-1:]
+		)
+		switch op.typ {
+		case undoDelete:
+			after = ed.Lines[op.end:]
+			ed.Lines = append(before, after...)
+		case undoAdd:
+			ed.Lines = append(before, append(op.lines, after...)...)
+		}
+		ed.dot = op.dot
+		ed.modified = true
+	}
+	return nil
+}
+
+func (ed *Editor) global(r rune) error {
 	var (
-		undolines []string
-		action    []undoAction
+		interactive = (r == 'G' || r == 'V')
+		invert      = (r == 'v' || r == 'V')
+		tokenizer   = ed.tokenizer
+		search, cmd string
 	)
+	// TODO(thimc): The V and G commands take a suffix
+	// according to the spec.  Doing this now will result
+	// in "invalid command suffix" error.
+	// if interactive {
+	// 	if err := ed.getCmdSuffix(); err != nil {
+	// 		return err
+	// 	}
+	// }
+	var delim = ed.tok
+	ed.token()
+	if delim == ' ' || delim == '\n' {
+		return ErrInvalidPatternDelim
+	}
+	var s, e = ed.start, ed.end
+	search = ed.scanStringUntil(delim)
+	if ed.tok != EOF && ed.tok != '\n' {
+		cmd = ed.scanString()
+		if strings.HasSuffix(cmd, string(delim)) {
+			cmd = cmd[:len(cmd)-1]
+		}
+	}
+	defer func() {
+		ed.g = false
+		ed.tokenizer = tokenizer
+		ed.undohist = append(ed.undohist, ed.globalUndo)
+		ed.globalCmd = cmd
+	}()
+	for idx := s - 1; idx <= e; idx++ {
+		if idx >= len(ed.Lines) {
+			continue
+		}
+		matched, err := regexp.MatchString(search, ed.Lines[idx])
+		if err != nil {
+			return err
+		}
+		if (!invert && !matched) || (invert && matched) {
+			continue
+		}
+		if cmd == "" && !interactive {
+			cmd = "p"
+		}
+		if interactive {
+			if err := ed.displayLines(ed.dot, ed.dot, ed.cs); err != nil {
+				return err
+			}
+			r := bufio.NewReader(ed.in)
+		input:
+			for {
+				select {
+				case <-ed.sigintch:
+					return ed.interrupt()
+				default:
+					ln, err := r.ReadString('\n')
+					if err != nil {
+						return err
+					}
+					if len(ln) > 1 {
+						ln = ln[:len(ln)-1]
+					}
+					cmd = ln
+					if cmd == "&" {
+						if ed.globalCmd == "" {
+							return ErrNoPreviousCmd
+						}
+						cmd = ed.globalCmd
+					}
+					break input
+				}
+			}
+		}
+		for _, c := range strings.Split(cmd, "\\") {
+			ed.dot = idx + 1
+			ed.start = ed.dot
+			ed.end = ed.dot
+			ed.tokenizer = newTokenizer(strings.NewReader(c + "\n"))
+			ed.token()
+			ed.g = true
+			if err = ed.do(); err != nil {
+				return err
+			}
+			if e >= len(ed.Lines) {
+				e = len(ed.Lines) - 1
+				idx--
+			}
+		}
+
+	}
+	ed.start = ed.dot
+	ed.end = ed.dot
+	return nil
+}
+
+func (ed *Editor) deleteLines(start, end int, action *[]undoAction) error {
+	undolines := make([]string, end-start+1)
+	copy(undolines, ed.Lines[start-1:end])
+	*action = append(*action, undoAction{
+		typ:   undoAdd,
+		start: start,
+		end:   start,
+		dot:   ed.dot,
+		lines: undolines,
+	})
+	ed.Lines = append(ed.Lines[:start-1], ed.Lines[end:]...)
+	ed.dot = start - 1
+	ed.start = min(start, len(ed.Lines))
+	ed.modified = true
+	return nil
+}
+
+func (ed *Editor) appendLines(start int, action *[]undoAction) error {
+loop:
+	for {
+		select {
+		case <-ed.sigintch:
+			return ed.interrupt()
+		default:
+			ed.dot = start
+			line, err := ed.tokenizer.ReadString('\n')
+			if err != nil {
+				break loop
+			}
+			if len(line) > 1 {
+				line = line[:len(line)-1]
+			}
+			if line == "." {
+				break loop
+			}
+			if len(ed.Lines) == start {
+				ed.Lines = append(ed.Lines, line)
+			} else {
+				ed.Lines = append(ed.Lines[:start], append([]string{line}, ed.Lines[start:]...)...)
+			}
+			start++
+			*action = append(*action, undoAction{
+				typ:   undoDelete,
+				start: start,
+				end:   start,
+				dot:   ed.dot,
+				lines: ed.Lines[start-1 : start],
+			})
+			ed.modified = true
+		}
+	}
+	return nil
+}
+
+func (ed *Editor) joinLines(start, end int, action *[]undoAction) error {
+	var undolines = make([]string, end-start+1)
+	copy(undolines, ed.Lines[start-1:end])
+	var lines = strings.Join(ed.Lines[start-1:end], "")
+	*action = append(*action, undoAction{
+		typ:   undoAdd,
+		start: start,
+		end:   start + len(undolines) - 1,
+		dot:   ed.dot,
+		lines: undolines,
+	})
+	var joined []string = append(append([]string{}, ed.Lines[:start-1]...), lines)
+	ed.Lines = append(joined, ed.Lines[end:]...)
+	*action = append(*action, undoAction{
+		typ:   undoDelete,
+		start: start,
+		end:   start,
+		dot:   ed.dot,
+		lines: []string{lines},
+	})
+	ed.dot = start
+	ed.modified = true
+	return nil
+}
+
+func (ed *Editor) displayLines(start, end int, flags cmdSuffix) error {
+	if start == 0 {
+		return ErrInvalidAddress
+	}
+	for start--; start != end; {
+		ed.dot = start + 1
+		var ln string
+		if flags&cmdSuffixNumber != 0 {
+			ln = fmt.Sprintf("%d\t", ed.dot)
+		}
+		if flags&cmdSuffixList != 0 {
+			var q = strings.Replace(strconv.QuoteToASCII(ed.Lines[start]), "$", "\\$", -1)
+			ln += fmt.Sprintf("%s$", q[1:len(q)-1])
+		} else {
+			ln += ed.Lines[start]
+		}
+		fmt.Fprintln(ed.out, ln)
+		start++
+	}
+	return nil
+}
+
+func (ed *Editor) moveLines(addr int, action *[]undoAction) error {
+	var lines = make([]string, ed.end-ed.start+1)
+	copy(lines, ed.Lines[ed.start-1:ed.end])
+	*action = append(*action, undoAction{
+		typ:   undoAdd,
+		start: ed.start,
+		end:   ed.start + len(lines) - 1,
+		dot:   ed.dot,
+		lines: lines,
+	})
+	ed.Lines = append(ed.Lines[:ed.start-1], ed.Lines[ed.end:]...)
+	if addr-len(lines) < 0 {
+		addr = len(lines) + addr
+	}
+	ed.Lines = append(ed.Lines[:addr-len(lines)], append(lines, ed.Lines[addr-len(lines):]...)...)
+
+	var undolines = make([]string, len(lines))
+	copy(undolines, ed.Lines[addr-len(lines):addr])
+	*action = append(*action, undoAction{
+		typ:   undoDelete,
+		start: addr - ed.start + 1,
+		end:   addr - ed.start + len(undolines),
+		dot:   addr,
+		lines: undolines,
+	})
+
+	ed.dot = addr
+	if addr < ed.start {
+		ed.dot += ed.end - ed.start + 1
+	}
+	return nil
+}
+
+func (ed *Editor) copyLines(addr int, action *[]undoAction) error {
+	var lines = make([]string, ed.end-ed.start+1)
+	copy(lines, ed.Lines[ed.start-1:ed.end])
+	ed.Lines = append(ed.Lines[:addr], append(lines, ed.Lines[addr:]...)...)
+	ed.end = addr + len(lines)
+	*action = append(*action, undoAction{
+		typ:   undoDelete,
+		start: addr + 1,
+		end:   addr + len(lines),
+		dot:   ed.dot,
+		lines: lines,
+	})
+	ed.end = len(lines)
+	ed.dot = addr + len(lines)
+	ed.modified = true
+	return nil
+}
+
+func (ed *Editor) readFile(path string) error {
+	if path == "" || path == "\n" {
+		if ed.path == "" {
+			return ErrNoFileName
+		}
+		path = ed.path
+	} else if unicode.IsSpace(rune(path[0])) {
+		return ErrInvalidFileName
+	}
+	var (
+		siz int64
+		cmd bool = path[0] == '!'
+	)
+	if cmd {
+		path = path[1:]
+		lines, err := ed.shell(path)
+		if err != nil {
+			return err
+		}
+		ed.Lines = lines
+		siz = int64(len(strings.Join(lines, " "))) + 1
+	} else {
+		f, err := os.Open(path)
+		if err != nil {
+			return ErrCannotOpenFile
+		}
+		buf, err := io.ReadAll(f)
+		if err != nil {
+			return ErrCannotReadFile
+		}
+		s, err := os.Stat(path)
+		if err != nil {
+			return ErrCannotReadFile
+		}
+		siz = s.Size() + 1
+		if err := f.Close(); err != nil {
+			return ErrCannotCloseFile
+		}
+		var lines = strings.Split(strings.TrimRight(string(buf), "\n"), "\n")
+		ed.Lines = lines
+		ed.path = path
+	}
+	if !ed.scripted {
+		fmt.Fprintln(ed.err, siz)
+	}
+	ed.dot = len(ed.Lines)
+	return nil
+}
+
+func (ed *Editor) writeFile(path string, mod rune, start, end int) error {
+	var (
+		file *os.File
+		err  error
+	)
+	if mod == 'W' {
+		file, err = os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
+	} else {
+		file, err = os.Create(path)
+	}
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	var siz int
+	for i := start - 1; i < end; i++ {
+		var line string = ed.Lines[i]
+		_, err := file.WriteString(line + "\n")
+		if err != nil {
+			return err
+		}
+		siz += len(line) + 1
+	}
+	ed.modified = false
+	if !ed.scripted {
+		fmt.Fprintln(ed.err, siz)
+	}
+	return err
+}
+
+// do executes a command on a range defined by start and end.
+func (ed *Editor) do() (err error) {
+	var action = make([]undoAction, 0)
 	defer func() {
 		if len(action) > 0 {
 			if !ed.g {
@@ -26,686 +441,480 @@ func (ed *Editor) doCommand() (err error) {
 			}
 		}
 	}()
+	ed.cs = 0
+	ed.ss = 0
+	ed.skipWhitespace()
 	switch ed.tok {
 	case 'a':
-		return ed.cmdAppend(&action)
+		ed.token()
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		return ed.appendLines(ed.end, &action)
 	case 'c':
-		return ed.cmdChange(undolines, &action)
+		ed.token()
+		if err := ed.check(ed.dot, ed.dot); err != nil {
+			return err
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		if err := ed.deleteLines(ed.start, ed.end, &action); err != nil {
+			return err
+		}
+		return ed.appendLines(ed.dot, &action)
 	case 'd':
-		return ed.cmdDelete(undolines, &action)
+		ed.token()
+		if err := ed.check(ed.dot, ed.dot); err != nil {
+			return err
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		if err := ed.deleteLines(ed.start, ed.end, &action); err != nil {
+			return err
+		}
+		ed.dot += 1
+		if addr := ed.dot; addr > len(ed.Lines) {
+			ed.dot = addr
+		}
+		return nil
 	case 'E', 'e':
-		return ed.cmdEdit(ed.tok == 'E')
+		var mod = ed.tok
+		ed.token()
+		if ed.addrc > 0 {
+			return ErrUnexpectedAddress
+		}
+		if ed.modified && mod != 'E' {
+			ed.modified = false
+			return ErrFileModified
+		}
+		if !unicode.IsSpace(ed.tok) {
+			return ErrUnexpectedCmdSuffix
+		}
+		ed.skipWhitespace()
+		ed.globalUndo = nil
+		ed.undohist = nil
+		ed.Lines = nil
+		action = nil
+		ed.modified = false
+		// TODO(thce): Edit/edit should take a command suffix.
+		// Doing so will also result in an error currently.
+		// if err := ed.getCmdSuffix(); err != nil {
+		// 	return err
+		// }
+		return ed.readFile(ed.scanString())
 	case 'f':
-		return ed.cmdFilename()
-	case 'V', 'G', 'v', 'g':
-		return ed.cmdGlobal(ed.tok == 'G' || ed.tok == 'V', ed.tok == 'v' || ed.tok == 'V')
-	case 'H':
-		return ed.cmdToggleError()
-	case 'h':
-		return ed.cmdExplainError()
-	case 'i':
-		return ed.cmdInsert(&action)
-	case 'j':
-		return ed.cmdJoin(undolines, &action)
-	case 'k':
-		return ed.cmdMark()
-	case 'm':
-		return ed.cmdMove(undolines, &action)
-	case 'l', 'n', 'p':
-		return ed.cmdPrint()
-	case 'P':
-		return ed.cmdTogglePrompt()
-	case 'q', 'Q':
-		return ed.cmdQuit(ed.tok == 'Q')
-	case 'r':
-		return ed.cmdRead(&action)
-	case 's':
-		return ed.cmdSubstitute(undolines, &action)
-	case 't':
-		return ed.cmdTransfer(&action)
-	case 'u':
-		return ed.cmdUndo()
-	case 'W', 'w':
-		return ed.cmdWrite(ed.tok == 'W')
-	case 'z':
-		return ed.cmdScroll()
-	case '=':
-		return ed.cmdPrintLineNumber()
-	case '!':
-		return ed.cmdExecute()
-	case 0, scanner.EOF:
-		if ed.s.Pos().Offset == 0 {
-			ed.dot++
-			if ed.dot >= len(ed.Lines) {
-				ed.dot = len(ed.Lines)
-				err = ErrInvalidAddress
+		ed.token()
+		var path string
+		if ed.addrc > 0 {
+			return ErrUnexpectedAddress
+		} else if !unicode.IsSpace(ed.tok) && ed.tok != 0x4 {
+			return ErrUnexpectedCmdSuffix
+		} else if path = ed.scanString(); path == "" {
+			if ed.path == "" {
+				return ErrNoFileName
 			}
-			ed.start = ed.dot
-			ed.end = ed.dot
-			if err != nil {
+		}
+		if path[0] == ' ' {
+			path = path[1:]
+		}
+		if path[0] == '!' {
+			return ErrInvalidRedirection
+		}
+		ed.path = path
+		fmt.Fprintln(ed.out, ed.path)
+		return nil
+	case 'V', 'G', 'v', 'g':
+		var mod = ed.tok
+		ed.token()
+		if ed.g {
+			return ErrCannotNestGlobal
+		} else if err := ed.check(1, len(ed.Lines)); err != nil {
+			return err
+		}
+		return ed.global(mod)
+	case 'h', 'H':
+		var mod = ed.tok
+		ed.token()
+		if ed.addrc > 0 {
+			return ErrUnexpectedAddress
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		if mod == 'H' {
+			ed.printErrors = !ed.printErrors
+		}
+		return ed.error
+	case 'i':
+		ed.token()
+		if ed.end == 0 {
+			ed.end = 1
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		return ed.appendLines(ed.end-1, &action)
+	case 'j':
+		ed.token()
+		if err := ed.check(ed.dot, ed.dot+1); err != nil {
+			return err
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		if ed.start != ed.end {
+			if err := ed.joinLines(ed.start, ed.end, &action); err != nil {
 				return err
 			}
 		}
-		if ed.end-1 < 0 {
+		return nil
+	case 'k':
+		ed.token()
+		if ed.end == 0 {
 			return ErrInvalidAddress
 		}
-		fmt.Fprintln(ed.out, ed.Lines[ed.end-1])
-		return err
-	}
-	return ErrUnknownCmd
-}
-
-func (ed *Editor) cmdAppend(action *[]undoAction) error {
-	r := bufio.NewReader(ed.in)
-loop:
-	for {
-		select {
-		case <-ed.sigintch:
-			ed.error = ErrInterrupt
-			fmt.Fprintln(ed.err, ErrDefault)
-			return ErrInterrupt
-		default:
-			line, err := r.ReadString('\n')
-			if err != nil {
-				break loop
-			}
-			line = line[:len(line)-1]
-			if line == "." {
-				break loop
-			}
-			if len(ed.Lines) == ed.end {
-				ed.Lines = append(ed.Lines, line)
-			} else {
-				ed.Lines = append(ed.Lines[:ed.end], append([]string{line}, ed.Lines[ed.end:]...)...)
-			}
-			ed.end++
-			*action = append(*action, undoAction{typ: undoDelete, start: ed.end - 1, end: ed.end})
-			ed.start = ed.end
-			ed.dot = ed.end
-			ed.dirty = true
+		var m = ed.tok
+		ed.token()
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
 		}
-	}
-	return nil
-}
-
-func (ed *Editor) cmdChange(undolines []string, action *[]undoAction) error {
-	undolines = make([]string, ed.end-ed.start+1)
-	copy(undolines, ed.Lines[ed.start-1:ed.end])
-	*action = append(*action, undoAction{typ: undoAdd, start: ed.start, end: ed.start - 1, d: ed.start + len(undolines) - 1, lines: undolines})
-	ed.Lines = append(ed.Lines[:ed.start-1], ed.Lines[ed.end:]...)
-
-	ed.end = ed.start - 1
-	r := bufio.NewReader(ed.in)
-loop:
-	for {
-		select {
-		case <-ed.sigintch:
-			fmt.Fprintln(ed.err, ErrDefault)
-			return ErrInterrupt
-		default:
-			line, err := r.ReadString('\n')
-			if err != nil {
-				break loop
-			}
-			line = line[:len(line)-1]
-			if line == "." {
-				break loop
-			}
-			if ed.end > len(ed.Lines) {
-				ed.Lines = append(ed.Lines[:ed.end], line)
-			} else {
-				ed.Lines = append(ed.Lines[:ed.end], append([]string{line}, ed.Lines[ed.end:]...)...)
-			}
-			ed.end++
-			*action = append(*action, undoAction{typ: undoDelete, start: ed.end - 1, end: ed.end})
-			ed.start = ed.end
-			ed.dot = ed.end
-			ed.dirty = true
+		if !unicode.IsLower(m) {
+			return ErrInvalidMark
 		}
-	}
-	return nil
-}
-
-func (ed *Editor) cmdDelete(undolines []string, action *[]undoAction) error {
-	undolines = make([]string, ed.end-ed.start+1)
-	copy(undolines, ed.Lines[ed.start-1:ed.end])
-	*action = append(*action, undoAction{typ: undoAdd, start: ed.start, end: ed.start - 1, d: ed.end + len(undolines) - 1, lines: undolines})
-	ed.Lines = append(ed.Lines[:ed.start-1], ed.Lines[ed.end:]...)
-
-	if ed.start > len(ed.Lines) {
-		ed.start = len(ed.Lines)
-	}
-	ed.end = ed.start
-	ed.dot = ed.start
-	ed.dirty = true
-	return nil
-}
-
-func (ed *Editor) cmdEdit(unconditionally bool) error {
-	ed.tok = ed.s.Scan()
-	ed.skipWhitespace()
-	var fname = ed.scanString()
-	if !unconditionally && ed.dirty {
-		ed.dirty = false
-		return ErrFileModified
-	}
-	lines, err := ed.readFile(fname, true, true)
-	if err != nil {
-		return err
-	}
-	ed.Lines = lines
-	return nil
-}
-
-func (ed *Editor) cmdFilename() error {
-	if ed.s.Pos().Offset != 1 {
-		return ErrUnexpectedAddress
-	}
-	if ed.tok = ed.s.Scan(); ed.tok == scanner.EOF {
-		if ed.path == "" {
-			return ErrNoFileName
-		}
-		fmt.Fprintln(ed.err, ed.path)
+		ed.mark[m-'a'] = ed.end
 		return nil
-	}
-	if ed.tok = ed.s.Scan(); ed.tok == '!' {
-		return ErrInvalidRedirection
-	}
-	var fname = ed.scanString()
-	if fname == "" {
-		return ErrNoFileName
-	}
-	ed.path = fname
-	fmt.Fprintln(ed.err, ed.path)
-	return nil
-}
-
-func (ed *Editor) cmdGlobal(interactive, inverted bool) error {
-	if ed.g {
-		return ErrCannotNestGlobal
-	}
-	if ed.s.Pos().Offset == 1 {
-		ed.start = 1
-		ed.end = len(ed.Lines)
-	}
-	ed.tok = ed.s.Scan()
-	var delim = ed.tok
-	ed.tok = ed.s.Scan()
-	if delim == ' ' || delim == scanner.EOF {
-		return ErrInvalidPatternDelim
-	}
-	var s, e, search = ed.start, ed.end, ed.scanStringUntil(delim)
-	if ed.tok == delim {
-		ed.tok = ed.s.Scan()
-	}
-	var cmd = ed.scanString()
-	if cmd != "" {
-		if cmd[:len(cmd)-1] == string(delim) {
-			cmd = cmd[:len(cmd)-1]
+	case 'l', 'n', 'p':
+		switch ed.tok {
+		case 'l':
+			ed.cs |= cmdSuffixList
+		case 'n':
+			ed.cs |= cmdSuffixNumber
+		case 'p':
+			ed.cs |= cmdSuffixPrint
 		}
-	}
-	if cmd == "" && !interactive {
-		cmd = "p"
-	}
-	ed.globalUndo = []undoAction{}
-	ed.g = true
-	defer func() {
-		ed.g = false
-		ed.undohist = append(ed.undohist, ed.globalUndo)
-	}()
-	for idx := s - 1; idx < e; idx++ {
-		match, err := regexp.MatchString(search, ed.Lines[idx])
+		if err := ed.check(ed.dot, ed.dot); err != nil {
+			return err
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		return ed.displayLines(ed.start, ed.end, ed.cs)
+	case 'm':
+		ed.token()
+		if err := ed.check(ed.dot, ed.dot); err != nil {
+			return err
+		}
+		addr, err := ed.getThirdAddress()
 		if err != nil {
 			return err
 		}
-		if (!match && !inverted) || (inverted && match) {
-			continue
+		if ed.start <= addr && addr < ed.end {
+			return ErrInvalidDestination
 		}
-		ed.start = idx + 1
-		ed.end = ed.start
-		ed.dot = ed.end
-		if interactive {
-			fmt.Fprintln(ed.out, ed.Lines[idx])
-			r := bufio.NewReader(ed.in)
-			for {
-				select {
-				case <-ed.sigintch:
-					fmt.Fprintln(ed.err, ErrDefault)
-					return ErrInterrupt
-				default:
-					line, err := r.ReadString('\n')
-					line = line[:len(line)-1]
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		return ed.moveLines(addr, &action)
+	case 'P':
+		ed.token()
+		if ed.addrc > 0 {
+			return ErrUnexpectedAddress
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		ed.showPrompt = !ed.showPrompt
+		return nil
+	case 'q', 'Q':
+		var mod = ed.tok
+		ed.token()
+		if ed.addrc > 0 {
+			return ErrUnexpectedAddress
+		}
+		if mod == 'q' && ed.modified {
+			ed.modified = false
+			return ErrFileModified
+		}
+		os.Exit(0)
+	case 'r':
+		if !unicode.IsSpace(ed.token()) {
+			return ErrUnexpectedCmdSuffix
+		} else if ed.addrc == 0 {
+			ed.end = len(ed.Lines)
+		}
+		var path string
+		if path = ed.scanString(); path == "" {
+			if ed.path == "" {
+				return ErrNoFileName
+			}
+		}
+		if path[0] == ' ' {
+			path = path[1:]
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		return ed.readFile(path)
+	case 's':
+		ed.token()
+		var (
+			delim = ed.tok
+			nth   = 1
+			re    *regexp.Regexp
+		)
+		ed.token()
+		var (
+			search  = ed.scanStringUntil(delim)
+			replace = ed.scanStringUntil(delim)
+		)
+		if ed.tok != '\n' {
+			for ed.tok != EOF && ed.tok != '\n' {
+				switch {
+				case ed.tok == 'g':
+					ed.ss |= subGlobal
+					nth = -1
+					ed.token()
+				case ed.tok == 'r':
+					ed.ss |= subLastRegex
+					// TODO(thimc): implement 'r' for the substitute command:
+					// (.,.)s
+					//  Repeats the last substitution.  This form of the s command accepts
+					//  a count suffix n, or any combination of the characters r, g, and p.
+					//  The r suffix causes the regular expression of the last search to be
+					//  used instead of that of the last substitution.
+					ed.token()
+				case unicode.IsDigit(ed.tok):
+					ed.ss |= subNth
+					nth, err = strconv.Atoi(string(ed.tok))
 					if err != nil {
 						return err
 					}
-					cmd = line
-					switch cmd {
-					case "":
-						continue
-					case "&":
-						cmd = ed.globalCmd
-					}
+					ed.token()
+				case ed.tok == 'p':
+					ed.cs |= cmdSuffixPrint
+					ed.token()
+				case ed.tok == 'l':
+					ed.cs |= cmdSuffixList
+					ed.token()
+				case ed.tok == 'n':
+					ed.cs |= cmdSuffixNumber
+					ed.token()
+				default:
+					return ErrInvalidCmdSuffix
 				}
 			}
 		}
-		ed.readInput(strings.NewReader(cmd))
-		if err := ed.doCommand(); err != nil {
+		if search == "" {
+			if ed.search == "" {
+				return ErrNoPrevPattern
+			}
+			search = ed.search
+		}
+		if replace == "%" {
+			if ed.replacestr == "" {
+				return ErrNoPreviousSub
+			}
+			replace = ed.replacestr
+		}
+		re, err = regexp.Compile(search)
+		if err != nil {
 			return err
 		}
-		if e > len(ed.Lines) {
-			e = len(ed.Lines)
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
 		}
-		ed.globalCmd = cmd
-	}
-	return nil
-}
-
-func (ed *Editor) cmdToggleError() error {
-	ed.printErrors = !ed.printErrors
-	return nil
-}
-
-func (ed *Editor) cmdExplainError() error {
-	if ed.error != nil {
-		fmt.Fprintln(ed.err, ed.error)
-	}
-	return ed.error
-}
-
-func (ed *Editor) cmdInsert(action *[]undoAction) error {
-	d := ed.end
-	r := bufio.NewReader(ed.in)
-loop:
-	for {
-		select {
-		case <-ed.sigintch:
-			fmt.Fprintln(ed.err, ErrDefault)
-			return ErrInterrupt
-		default:
-			line, err := r.ReadString('\n')
-			if err != nil {
-				break loop
+		if err := ed.check(ed.dot, ed.dot); err != nil {
+			return err
+		}
+		var subs int
+		for i := 0; i <= ed.end-ed.start; i++ {
+			if !re.MatchString(ed.Lines[i]) {
+				continue
 			}
-			line = line[:len(line)-1]
-			if line == "." {
-				break loop
-			}
-			if ed.end-1 < 0 {
-				ed.end++
-			}
-			if ed.end > len(ed.Lines) {
-				ed.Lines = append(ed.Lines, line)
-			} else {
-				ed.Lines = append(ed.Lines[:ed.end], ed.Lines[ed.end-1:]...)
-				ed.Lines[ed.end-1] = line
-			}
-			ed.dirty = true
-			*action = append(*action, undoAction{typ: undoDelete, start: ed.end - 1, end: ed.end, d: d})
-			ed.end++
-		}
-	}
-	ed.end--
-	ed.start = ed.end
-	ed.dot = ed.end
-	return nil
-}
-
-func (ed *Editor) cmdJoin(undolines []string, action *[]undoAction) error {
-	if ed.end == ed.start {
-		ed.end++
-	}
-	if ed.end > len(ed.Lines) {
-		return ErrInvalidAddress
-	}
-	undolines = make([]string, ed.end-ed.start+1)
-	copy(undolines, ed.Lines[ed.start-1:ed.end])
-	var joined = strings.Join(ed.Lines[ed.start-1:ed.end], "")
-	*action = append(*action, undoAction{typ: undoAdd, start: ed.end - len(undolines) + 1, end: ed.end - len(undolines), d: ed.end + len(undolines), lines: undolines})
-	var result []string = append(append([]string{}, ed.Lines[:ed.start-1]...), joined)
-	ed.Lines = append(result, ed.Lines[ed.end:]...)
-	*action = append(*action, undoAction{typ: undoDelete, start: ed.start - 1, end: ed.start})
-	ed.end = ed.start
-	ed.dot = ed.start
-	ed.dirty = true
-	return nil
-}
-
-func (ed *Editor) cmdMark() error {
-	ed.tok = ed.s.Scan()
-	var r rune = ed.tok
-	ed.tok = ed.s.Scan()
-	if r == scanner.EOF || !unicode.IsLower(r) {
-		return ErrInvalidMark
-	}
-	var mark int = int(r) - 'a'
-	if mark < 0 || mark > len(ed.mark) {
-		return ErrInvalidMark
-	}
-	ed.mark[mark] = ed.end
-	return nil
-}
-
-func (ed *Editor) cmdMove(undolines []string, action *[]undoAction) error {
-	ed.tok = ed.s.Scan()
-	dst, err := ed.scanNumber()
-	if err != nil {
-		ed.start = ed.dot
-		ed.end = ed.dot
-		return ErrInvalidCmdSuffix
-	}
-	if dst < 0 || dst > len(ed.Lines) {
-		return ErrDestinationExpected
-	}
-	if ed.start <= dst && dst < ed.end {
-		return ErrInvalidAddress
-	}
-	lines := make([]string, ed.end-ed.start+1)
-	copy(lines, ed.Lines[ed.start-1:ed.end])
-	*action = append(*action, undoAction{typ: undoAdd, start: ed.start, end: ed.start - 1, d: ed.end + 1, lines: lines})
-	ed.Lines = append(ed.Lines[:ed.start-1], ed.Lines[ed.end:]...)
-	if dst-len(lines) < 0 {
-		dst = len(lines) + dst
-	}
-	ed.Lines = append(ed.Lines[:dst-len(lines)], append(lines, ed.Lines[dst-len(lines):]...)...)
-	undolines = make([]string, len(lines))
-	copy(undolines, ed.Lines[dst-len(lines):dst])
-	*action = append(*action, undoAction{typ: undoDelete, start: dst - len(lines), end: dst})
-	ed.end = dst
-	ed.start = dst
-	ed.dot = dst
-	ed.dirty = true
-	return nil
-}
-
-func (ed *Editor) cmdPrint() error {
-	var numbers, unambiguous bool
-check:
-	for {
-		switch ed.tok {
-		case 'p':
-			ed.tok = ed.s.Scan()
-		case 'n':
-			numbers = true
-			ed.tok = ed.s.Scan()
-		case 'l':
-			unambiguous = true
-			ed.tok = ed.s.Scan()
-		default:
-			break check
-		}
-	}
-	for i := ed.start - 1; i < ed.end; i++ {
-		if i < 0 {
-			continue
-		}
-		if numbers {
-			fmt.Fprintf(ed.out, "%d\t", i+1)
-		}
-		if unambiguous {
-			var q = strconv.QuoteToASCII(ed.Lines[i])
-			fmt.Fprintf(ed.out, "%s$\n", q[1:len(q)-1])
-		} else {
-			fmt.Fprintln(ed.out, ed.Lines[i])
-		}
-	}
-	return nil
-}
-
-func (ed *Editor) cmdTogglePrompt() error {
-	ed.showPrompt = !ed.showPrompt
-	if ed.prompt == "" {
-		ed.prompt = DefaultPrompt
-	}
-	return nil
-}
-
-func (ed *Editor) cmdQuit(unconditionally bool) error {
-	if !unconditionally && ed.dirty {
-		ed.dirty = false
-		return ErrFileModified
-	}
-	os.Exit(0)
-	return nil
-}
-
-func (ed *Editor) cmdRead(action *[]undoAction) error {
-	ed.tok = ed.s.Scan()
-	ed.skipWhitespace()
-	var fname = ed.scanString()
-	lines, err := ed.readFile(fname, false, true)
-	if err != nil {
-		return err
-	}
-	for _, line := range lines {
-		if len(ed.Lines) < len(lines) {
-			ed.Lines = append(ed.Lines, line)
-		} else {
-			ed.Lines = append(ed.Lines[:ed.end], append([]string{line}, ed.Lines[ed.end:]...)...)
-		}
-		ed.dirty = true
-		ed.end++
-		*action = append(*action, undoAction{typ: undoDelete, start: ed.end - 1, end: ed.end})
-	}
-	ed.start = ed.end
-	ed.dot = ed.end
-	return nil
-}
-
-func (ed *Editor) cmdSubstitute(undolines []string, action *[]undoAction) error {
-	ed.tok = ed.s.Scan()
-	var (
-		search, repl string
-		mod          rune
-		re           *regexp.Regexp
-	)
-	ed.tok = ed.s.Scan()
-	if ed.tok == scanner.EOF {
-		if ed.search == "" && ed.replacestr == "" {
-			return ErrNoPreviousSub
-		}
-		search = ed.search
-		repl = ed.replacestr
-	} else {
-		search = ed.scanStringUntil('/')
-	}
-	ed.tok = ed.s.Scan()
-	if ed.tok != scanner.EOF {
-		repl = ed.scanStringUntil('/')
-		ed.tok = ed.s.Scan()
-	}
-	if repl == "%" && ed.replacestr != "" {
-		repl = ed.replacestr
-	}
-	if ed.tok != scanner.EOF {
-		mod = ed.tok
-	}
-	re, err := regexp.Compile(search)
-	if err != nil {
-		return ErrNoMatch
-	}
-	var (
-		all bool = (mod == 'g')
-		n   int  = 1
-		N   int  = 1
-	)
-	if unicode.IsDigit(mod) {
-		num, err := strconv.Atoi(string(mod))
-		if err != nil {
-			return ErrInvalidCmdSuffix
-		}
-		n = num
-		N = num
-	}
-	var (
-		match bool
-		s     int = ed.start - 1
-		e     int = ed.end
-		d     int
-		first bool = true
-	)
-	for i := e - 1; i >= s; i-- {
-		n = N
-		if re.MatchString(ed.Lines[i]) {
-			if first {
-				d = i
-				first = false
-			}
-			match = true
-			undolines = make([]string, 1)
-			copy(undolines, []string{ed.Lines[i]})
-			submatch := re.FindAllStringSubmatch(ed.Lines[i], -1)
-			// TODO: Fix submatches
-			ed.Lines[i] = re.ReplaceAllStringFunc(ed.Lines[i], func(s string) string {
-				var cs scanner.Scanner
-				cs.Init(strings.NewReader(repl))
-				cs.Mode = scanner.ScanChars
-				cs.Whitespace ^= scanner.GoWhitespace
+			var (
+				submatch = re.FindAllStringSubmatch(ed.Lines[i], -1)
+				matches  = re.FindAllStringIndex(ed.Lines[i], nth)
+			)
+			for mn, match := range matches {
+				if nth > 1 && mn != nth-1 {
+					continue
+				}
 				var (
-					prepl string
-					ctok  rune = cs.Scan()
+					start = match[0]
+					end   = match[1]
 				)
-				for ctok != scanner.EOF {
-					if ctok != '\\' && cs.Peek() == '&' {
-						prepl += string(ctok)
-						ctok = cs.Scan()
-						_ = ctok
-						ctok = cs.Scan()
-						prepl += s
-						continue
-					} else if ctok == '\\' && unicode.IsDigit(cs.Peek()) {
-						ctok = cs.Scan()
-						n, err := strconv.Atoi(string(ctok))
-						if err == nil && n-1 >= 0 && n-1 < len(submatch[0]) {
-							ctok = cs.Scan()
-							prepl += submatch[0][n-1]
+				var t = newTokenizer(strings.NewReader(replace))
+				t.token()
+				var r string
+				for t.tok != EOF {
+					if (t.tok != '\\' && t.peek() == '&') || (t.tokpos == 1 && t.tok == '&') {
+						if t.tokpos > 1 {
+							r += string(t.tok)
+							t.token()
 						}
+						t.token()
+						r += ed.Lines[i][start:end]
+						continue
+					} else if t.tok == '\\' && unicode.IsDigit(t.peek()) {
+						t.token()
+						n, err := strconv.Atoi(string(t.tok))
+						if err != nil {
+							// TODO(thimc): verify which error the substitute command returns if
+							// the number is not valid as per: The character sequence \m, where m
+							// is a number in the range [1,9], is replaced by the mth backreference
+							// expression of the matched text.
+							return ErrInvalidCmdSuffix
+						}
+						t.token()
+						r += submatch[0][n-1]
 						continue
 					}
-					prepl += string(ctok)
-					ctok = cs.Scan()
+					r += string(t.tok)
+					t.token()
 				}
-				n--
-				if all || n == 0 {
-					return prepl
-				}
-				return s
-			})
-			ed.start = d + 1
-			ed.end = ed.start
-			ed.dot = ed.start
-			*action = append(*action, undoAction{typ: undoAdd, start: i + 1, end: i, d: e, lines: undolines})
-			*action = append(*action, undoAction{typ: undoDelete, start: i, end: i + 1, lines: []string{ed.Lines[i]}})
-			ed.dirty = true
+				var replaced = ed.Lines[i][:start] + re.ReplaceAllString(search, r) + ed.Lines[i][end:]
+				action = append(action,
+					undoAction{typ: undoAdd,
+						start: i + 1,
+						end:   i + 1,
+						dot:   ed.dot,
+						lines: []string{ed.Lines[i]},
+					})
+				action = append(action, undoAction{
+					typ:   undoDelete,
+					start: i + 1,
+					end:   i + 1,
+					lines: []string{replaced},
+				})
+				ed.Lines[i] = replaced
+			}
+			ed.dot = i + 1
+			subs++
 		}
-	}
-	if !match {
-		return ErrNoMatch
-	}
-	return nil
-}
-
-func (ed *Editor) cmdTransfer(action *[]undoAction) error {
-	ed.tok = ed.s.Scan()
-	if ed.tok == scanner.EOF {
-		return ErrDestinationExpected
-	}
-	dst, err := ed.scanNumber()
-	if err != nil {
-		return ErrDestinationExpected
-	}
-	if ed.start-1 < 0 || ed.end > len(ed.Lines) || dst > len(ed.Lines) || dst < 0 {
-		return ErrInvalidAddress
-	}
-	lines := make([]string, ed.end-ed.start+1)
-	copy(lines, ed.Lines[ed.start-1:ed.end])
-	ed.Lines = append(ed.Lines[:dst], append(lines, ed.Lines[dst:]...)...)
-	ed.end = dst + len(lines)
-	*action = append(*action, undoAction{typ: undoDelete, start: dst, end: dst + len(lines), d: dst + 1})
-	ed.start = ed.end
-	ed.dot = ed.end
-	ed.dirty = true
-	return nil
-}
-
-func (ed *Editor) cmdUndo() error {
-	if ed.s.Pos().Offset != 1 {
-		return ErrUnexpectedAddress
-	}
-	if ed.s.Peek() != scanner.EOF {
-		return ErrInvalidCmdSuffix
-	}
-	return ed.undo()
-}
-
-func (ed *Editor) cmdWrite(append bool) error {
-	var (
-		quit bool
-		full = (ed.s.Pos().Offset == 1)
-	)
-	ed.tok = ed.s.Scan()
-	if !append {
-		if ed.tok == 'q' {
-			ed.tok = ed.s.Scan()
-			quit = true
+		if subs == 0 && !ed.g {
+			return ErrNoMatch
+		} else if ed.cs&(cmdSuffixList|cmdSuffixNumber|cmdSuffixPrint) > 0 {
+			return ed.displayLines(ed.dot, ed.dot, ed.cs)
 		}
+		return nil
+	case 't':
+		ed.token()
+		if err := ed.check(ed.dot, ed.dot); err != nil {
+			return err
+		}
+		addr, err := ed.getThirdAddress()
+		if err != nil {
+			return err
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		return ed.copyLines(addr, &action)
+	case 'u':
+		ed.token()
+		if ed.addrc > 0 {
+			return ErrUnexpectedAddress
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		return ed.undo()
+	case 'W', 'w':
+		var (
+			t    = ed.tok
+			mod  = ed.token()
+			path string
+		)
+		if !unicode.IsSpace(ed.tok) {
+			return ErrUnexpectedCmdSuffix
+		} else if path = ed.scanString(); path == "" {
+			if ed.path == "" {
+				return ErrNoFileName
+			}
+		}
+		if path[0] == ' ' {
+			path = path[1:]
+		}
+		if ed.addrc == 0 && len(ed.Lines) < 1 {
+			ed.start = 0
+			ed.end = 0
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		if err := ed.writeFile(path, t, ed.start, ed.end); err != nil {
+			return err
+		} else if path[0] != '!' {
+			ed.modified = false
+			return nil
+		} else if ed.modified && !ed.scripted && mod == 'q' {
+			os.Exit(0)
+		}
+		return nil
+	case 'x':
+		ed.token()
+		if ed.addrc > 0 {
+			return ErrUnexpectedAddress
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		return ErrCryptUnavailable
+	case 'z':
+		ed.token()
+		ed.start = 1
+		var n int
+		if err := ed.check(ed.start, ed.dot+1); err != nil {
+			return err
+		} else if ed.tok > '0' && ed.tok <= '9' {
+			var err error
+			n, err = strconv.Atoi(string(ed.tok))
+			if err != nil {
+				return ErrNumberOutOfRange
+			}
+			ed.token()
+		}
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		return ed.displayLines(ed.end, min(len(ed.Lines), ed.end+n), ed.cs)
+	case '=':
+		ed.token()
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+		var n = ed.end
+		if ed.addrc > 1 {
+			n = len(ed.Lines)
+		}
+		fmt.Fprintln(ed.out, n)
+		return nil
+	case '!':
+		ed.token()
+		if ed.addrc > 0 {
+			return ErrUnexpectedAddress
+		}
+		ed.skipWhitespace()
+		var cmd = ed.scanString()
+		ed.getCmdSuffix()
+		output, err := ed.shell(cmd)
+		if err != nil {
+			return err
+		}
+		for i := range output {
+			fmt.Fprintln(ed.out, output[i])
+		}
+		fmt.Fprintln(ed.out, "!")
+		return nil
+	case '\n':
+		ed.start = 1
+		if err := ed.check(ed.start, ed.dot+1); err != nil {
+			return err
+		}
+		return ed.displayLines(ed.end, ed.end, 0)
 	}
-	if ed.tok == ' ' {
-		ed.tok = ed.s.Scan()
-	}
-	var fname = ed.scanString()
-	if fname == "" && ed.path == "" {
-		return ErrNoFileName
-	}
-	if fname == "" {
-		fname = ed.path
-	}
-	var s, e int = ed.start, ed.end
-	if full {
-		s = 1
-		e = len(ed.Lines)
-	}
-	var err = ed.writeFile(append, s, e, fname)
-	if quit {
-		os.Exit(0)
-	}
-	return err
-}
-
-func (ed *Editor) cmdScroll() error {
-	ed.tok = ed.s.Scan()
-	scroll, err := ed.scanNumber()
-	if err != nil || scroll == 0 {
-		scroll = ed.scroll
-	}
-	ed.start = ed.end - 1
-	ed.end += scroll
-	if ed.end > len(ed.Lines) {
-		ed.end = len(ed.Lines)
-	}
-	for ; ed.start < ed.end; ed.start++ {
-		fmt.Fprintln(ed.out, ed.Lines[ed.start])
-	}
-	ed.dot = ed.start + 1
-	ed.scroll = scroll
-	return nil
-}
-
-func (ed *Editor) cmdPrintLineNumber() error {
-	fmt.Fprintln(ed.out, len(ed.Lines))
-	return nil
-}
-
-func (ed *Editor) cmdExecute() error {
-	ed.tok = ed.s.Scan()
-	ed.skipWhitespace()
-	var buf = ed.scanString()
-	output, err := ed.readFile("!"+buf, false, false)
-	if err != nil {
-		return err
-	}
-	for i := range output {
-		fmt.Fprintln(ed.err, output[i])
-	}
-	fmt.Fprintln(ed.err, "!")
-	return nil
+	ed.token()
+	return ErrUnknownCmd
 }

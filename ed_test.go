@@ -24,10 +24,9 @@ func TestSignalSIGHUP(t *testing.T) {
 		timeout  = time.After(dur)
 		expected = fmt.Sprintf("%d\n", len(buf)*2)
 	)
-	ted.removeDummyFile(fname)
-	defer ted.removeDummyFile(fname)
-	ted.setupTestFile(buf)
-	ted.dirty = true
+	defer os.Remove(fname)
+	setupMemoryFile(ted, buf)
+	ted.modified = true
 	ted.printErrors = true
 	go func() {
 		ted.sighupch <- syscall.SIGHUP
@@ -55,10 +54,13 @@ func TestSignalSIGINT(t *testing.T) {
 		timeout  = time.After(dur)
 	)
 	ted.in = strings.NewReader("a\nABCDEF")
+	ted.printErrors = true
 	go func() {
 		ted.sigintch <- syscall.SIGINT
 	}()
-	ted.Do()
+	if err := ted.Do(); err != ErrInterrupt {
+		t.Fatal(err)
+	}
 	select {
 	case <-time.After(500 * time.Millisecond):
 		if reflect.DeepEqual(ted.Lines, expected) {

@@ -10,24 +10,24 @@ import (
 // value of a UTF-8 encoded rune, but the value itself has no meaning.
 const EOF rune = utf8.UTFMax
 
-// Tokenizer is a buffered IO reader that implements peek functionality.
-type Tokenizer struct {
+// tokenizer is a buffered IO reader that implements peek functionality.
+type tokenizer struct {
 	tok    rune
 	tokpos int
 	*bufio.Reader
 }
 
-// NewTokenizer creates a new Tokenizer and initializes the underlying
+// newTokenizer creates a new Tokenizer and initializes the underlying
 // `bufio.Reader` to `r`.
-func NewTokenizer(r io.Reader) *Tokenizer {
-	return &Tokenizer{
+func newTokenizer(r io.Reader) *tokenizer {
+	return &tokenizer{
 		Reader: bufio.NewReader(r),
 	}
 }
 
 // token reads (consumes) one rune from the input and returns it. On
 // error it returns EOF as a rune.
-func (t *Tokenizer) token() rune {
+func (t *tokenizer) token() rune {
 	var err error
 	t.tok, _, err = t.ReadRune()
 	if err != nil {
@@ -40,7 +40,7 @@ func (t *Tokenizer) token() rune {
 
 // peek peeks at the next token rune without consuming it. On error it
 // returns EOF as a rune.
-func (t *Tokenizer) peek() rune {
+func (t *tokenizer) peek() rune {
 	for n := utf8.UTFMax; n > 0; n-- {
 		b, err := t.Peek(n)
 		if err != nil {
