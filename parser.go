@@ -110,19 +110,25 @@ func (ed *Editor) nextAddress() (int, error) {
 				}
 			}
 			ed.search = search
-			var s, e = 0, len(ed.lines)
+			var (
+				last  = len(ed.lines)
+				s     = 0
+				e     = last
+				found bool
+			)
 			if mod == '?' {
-				s = ed.start - 2
+				s = last - 1
 				e = 0
 			}
-			for i := s; i != e; { //i > s && i < e; {
+			for i := s; i != e; {
 				match, err := regexp.MatchString(search, ed.lines[i])
 				if err != nil {
 					return 0, ErrNoMatch
 				}
 				if match {
 					addr = i + 1
-					return addr, nil
+					found = true
+					break
 				}
 				if mod == '/' {
 					i++
@@ -130,7 +136,9 @@ func (ed *Editor) nextAddress() (int, error) {
 					i--
 				}
 			}
-			return -1, ErrNoMatch
+			if !found {
+				return -1, ErrNoMatch
+			}
 		case ed.tok == '\'':
 			if !first {
 				return -1, ErrInvalidAddress

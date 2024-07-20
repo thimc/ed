@@ -32,25 +32,6 @@ func setupMemoryFile(ed *Editor, buf []string) {
 	ed.printErrors = true
 }
 
-func resetEditor(ed *Editor) {
-	ed.lines = []string{}
-	ed.path = ""
-	ed.start = 0
-	ed.end = 0
-	ed.addrc = 0
-	ed.dot = 0
-	ed.shellCmd = ""
-	ed.g = false
-	ed.error = nil
-	ed.scroll = 0
-	ed.search = ""
-	ed.replacestr = ""
-	ed.showPrompt = false
-	ed.prompt = ""
-	ed.shellCmd = ""
-	ed.globalCmd = ""
-}
-
 // createDummyFile creates a dummy file `fname` containing `dummyFile`.
 func createDummyFile(fname string) error {
 	file, err := os.Create(fname)
@@ -150,9 +131,23 @@ func TestParser(t *testing.T) {
 			init:   position{start: last, end: last, dot: last},
 			expect: position{start: 1, end: 1, dot: last, addrc: 1},
 		},
+		{
+			cmd:    "1,/^F$/-",
+			init:   position{start: last, end: last, dot: last},
+			expect: position{start: 1, end: 5, dot: last, addrc: 2},
+		},
+		{
+			cmd:    "?D?,?B?+",
+			init:   position{start: last, end: last, dot: last},
+			expect: position{start: 4, end: 3, dot: last, addrc: 2},
+		},
 
-		// Error cases
+		// Error cases, some of these positions that are expected do not make
+		// sense but since we are not executing any command _after_ them, i.e.
+		// we are not checking the range with [ed.check], so it is fine.
+
 		{cmd: "'f", err: ErrInvalidAddress},
+		{cmd: "1," + fmt.Sprint(last+20), err: ErrInvalidAddress, expect: position{start: 0, end: 1, dot: 0, addrc: 2}},
 		{cmd: "']", err: ErrInvalidMark},
 		{cmd: "1.", err: ErrInvalidAddress},
 		{cmd: "-999", err: ErrInvalidAddress, expect: position{addrc: 1}},

@@ -1286,12 +1286,9 @@ func TestCmdNone(t *testing.T) {
 		{
 			cmd:    "10\n",
 			output: dummyFile[9] + "\n",
-			err:    nil,
 		},
-		{
-			cmd: "999\n",
-			err: ErrInvalidAddress,
-		},
+		{cmd: "\n", err: ErrInvalidAddress},
+		{cmd: "999\n", err: ErrInvalidAddress},
 	}
 	for _, tt := range tests {
 		var (
@@ -1307,6 +1304,25 @@ func TestCmdNone(t *testing.T) {
 			}
 			if b.String() != tt.output {
 				t.Fatalf("expected output %q, got %q", tt.output, b.String())
+			}
+		})
+	}
+}
+
+func TestCmdUnknown(t *testing.T) {
+	tests := []string{"A\n", "B\n", "C\n"}
+	for _, tt := range tests {
+		var (
+			b      bytes.Buffer
+			ted    = New(WithStdout(&b), WithStderr(&b))
+			expect = ErrUnknownCmd
+		)
+		ted.printErrors = true
+		setupMemoryFile(ted, dummyFile)
+		t.Run(tt, func(t *testing.T) {
+			ted.in = strings.NewReader(tt)
+			if err := ted.Do(); err != expect {
+				t.Fatalf("expected error %q, got %q", expect, err)
 			}
 		})
 	}
