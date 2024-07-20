@@ -123,6 +123,7 @@ func New(opts ...OptionFunc) *Editor {
 		in:       os.Stdin,
 		out:      os.Stdout,
 		err:      os.Stderr,
+		prompt:   DefaultPrompt,
 	}
 	for _, opt := range opts {
 		opt(ed)
@@ -203,7 +204,7 @@ func WithScripted(b bool) OptionFunc {
 // encountered they are automatically defaulted to [ErrDefault].
 func (ed *Editor) Do() error {
 	if ed.showPrompt {
-		fmt.Fprint(ed.err, ed.prompt)
+		fmt.Fprint(ed.out, ed.prompt)
 	}
 	ed.tokenizer = newTokenizer(ed.in)
 	ed.token()
@@ -217,6 +218,14 @@ func (ed *Editor) Do() error {
 	if ed.error = ed.do(); ed.error != nil {
 		if !ed.printErrors {
 			return ErrDefault
+		}
+		return ed.error
+	}
+	if ed.cs > 0 {
+		if ed.error = ed.displayLines(ed.dot, ed.dot, ed.cs); ed.error != nil {
+			if !ed.printErrors {
+				return ErrDefault
+			}
 		}
 	}
 	return ed.error

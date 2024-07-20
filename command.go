@@ -16,19 +16,20 @@ import (
 type cmdSuffix uint8
 
 const (
-	cmdSuffixPrint  cmdSuffix = 1 << iota // p
-	cmdSuffixList                         // l
-	cmdSuffixNumber                       // n
+	cmdSuffixPrint  cmdSuffix = 1 << iota // p - print the last line
+	cmdSuffixList                         // l - list the last line
+	cmdSuffixNumber                       // n - enumerate the last line
 )
 
 // subSuffix is a bitmask for the substitute command.
 type subSuffix uint8
 
 const (
-	subGlobal    subSuffix = 1 << iota // g
-	subNth                             // 0...9
-	subPrint                           // p
-	subLastRegex                       // r
+	subGlobal    subSuffix = 1 << iota // g    complement previous global substiute suffix
+	subNth                             // 0..9 repeat last substitution
+	subPrint                           // p    complement previous print suffix
+	subLastRegex                       // r    use last regex instead of last pattern
+	subRepeat                          // \n   repeat last substitution
 )
 
 // getCmdSuffix extracts a command suffix which modifies the behaviour
@@ -60,7 +61,7 @@ func (ed *Editor) getCmdSuffix() error {
 			break
 		}
 	}
-	if ed.tok != '\n' {
+	if ed.tok != '\n' && ed.tok != EOF {
 		return ErrInvalidCmdSuffix
 	}
 	return nil
@@ -447,6 +448,82 @@ func (ed *Editor) writeFile(path string, mod rune, start, end int) error {
 	return err
 }
 
+func (ed *Editor) substitute(search, replace string, nth int, action *[]undoAction) error {
+	var subs int
+	re, err := regexp.Compile(search)
+	if err != nil {
+		return err
+	}
+	for i := 0; i <= ed.end-ed.start; i++ {
+		if !re.MatchString(ed.lines[i]) {
+			continue
+		}
+		var (
+			submatch = re.FindAllStringSubmatch(ed.lines[i], -1)
+			matches  = re.FindAllStringIndex(ed.lines[i], nth)
+		)
+		for mi, match := range matches {
+			if nth > 1 && mi != nth-1 {
+				continue
+			}
+			var (
+				start = match[0]
+				end   = match[1]
+				t     = newTokenizer(strings.NewReader(replace))
+			)
+			t.token()
+			var r string
+			for t.tok != EOF {
+				if (t.tok != '\\' && t.peek() == '&') || (t.tokpos == 1 && t.tok == '&') {
+					if t.tokpos > 1 {
+						r += string(t.tok)
+						t.token()
+					}
+					t.token()
+					r += ed.lines[i][start:end]
+					continue
+				} else if t.tok == '\\' && unicode.IsDigit(t.peek()) {
+					t.token()
+					n, err := strconv.Atoi(string(t.tok))
+					if err != nil {
+						return ErrNumberOutOfRange
+					}
+					t.token()
+					r += submatch[0][n-1]
+					continue
+				}
+				r += string(t.tok)
+				t.token()
+			}
+			var replaced = ed.lines[i][:start] + r + ed.lines[i][end:]
+			*action = append(*action,
+				undoAction{typ: undoAdd,
+					start: i + 1,
+					end:   i + 1,
+					dot:   ed.dot,
+					lines: []string{ed.lines[i]},
+				})
+			*action = append(*action, undoAction{
+				typ:   undoDelete,
+				start: i + 1,
+				end:   i + 1,
+				lines: []string{replaced},
+			})
+			ed.lines[i] = replaced
+		}
+		ed.dot = i + 1
+		subs++
+	}
+	ed.search = search
+	ed.replacestr = replace
+	if subs == 0 && !ed.g {
+		return ErrNoMatch
+	} else if ed.g && ed.cs&cmdSuffixPrint|cmdSuffixNumber|cmdSuffixList > 0 {
+		return ed.displayLines(ed.dot, ed.dot, ed.cs)
+	}
+	return nil
+}
+
 // do executes a command on a range defined by start and end.
 func (ed *Editor) do() (err error) {
 	var action = make([]undoAction, 0)
@@ -460,7 +537,6 @@ func (ed *Editor) do() (err error) {
 		}
 	}()
 	ed.cs = 0
-	ed.ss = 0
 	ed.skipWhitespace()
 	switch ed.tok {
 	case 'a':
@@ -536,7 +612,6 @@ func (ed *Editor) do() (err error) {
 			}
 			path = ed.path
 		}
-
 		if path[0] == ' ' {
 			path = path[1:]
 		}
@@ -621,7 +696,9 @@ func (ed *Editor) do() (err error) {
 		if err := ed.getCmdSuffix(); err != nil {
 			return err
 		}
-		return ed.displayLines(ed.start, ed.end, ed.cs)
+		var err = ed.displayLines(ed.start, ed.end, ed.cs)
+		ed.cs = 0
+		return err
 	case 'm':
 		ed.token()
 		if err := ed.check(ed.dot, ed.dot); err != nil {
@@ -679,53 +756,62 @@ func (ed *Editor) do() (err error) {
 		}
 		return ed.readFile(path)
 	case 's':
-		ed.token()
 		var (
-			delim = ed.tok
-			nth   = 1
-			re    *regexp.Regexp
+			nth   int = 1
+			err   error
+			delim rune
 		)
 		ed.token()
-		var (
-			search  = ed.scanStringUntil(delim)
-			replace = ed.scanStringUntil(delim)
-		)
-		if ed.tok != '\n' {
-			for ed.tok != EOF && ed.tok != '\n' {
-				switch {
-				case ed.tok == 'g':
-					ed.ss |= subGlobal
-					nth = -1
-					ed.token()
-				case ed.tok == 'r':
-					ed.ss |= subLastRegex
-					// TODO(thimc): implement 'r' for the substitute command:
-					// (.,.)s
-					//  Repeats the last substitution.  This form of the s command accepts
-					//  a count suffix n, or any combination of the characters r, g, and p.
-					//  The r suffix causes the regular expression of the last search to be
-					//  used instead of that of the last substitution.
-					ed.token()
-				case unicode.IsDigit(ed.tok):
-					ed.ss |= subNth
-					nth, err = strconv.Atoi(string(ed.tok))
-					if err != nil {
-						return err
-					}
-					ed.token()
-				case ed.tok == 'p':
-					ed.cs |= cmdSuffixPrint
-					ed.token()
-				case ed.tok == 'l':
-					ed.cs |= cmdSuffixList
-					ed.token()
-				case ed.tok == 'n':
-					ed.cs |= cmdSuffixNumber
-					ed.token()
-				default:
+		for {
+			switch {
+			case ed.tok == '\n':
+				ed.ss |= subRepeat
+			case ed.tok == 'g':
+				ed.ss |= subGlobal
+				ed.token()
+			case ed.tok == 'p':
+				ed.ss |= subPrint
+				ed.token()
+			case ed.tok == 'r':
+				ed.ss |= subLastRegex
+				ed.token()
+			case unicode.IsDigit(ed.tok):
+				nth, err = strconv.Atoi(string(ed.tok))
+				if err != nil {
+					return ErrNumberOutOfRange
+				}
+				ed.ss |= subNth
+				ed.ss &= ^subGlobal
+			default:
+				if ed.ss > 0 {
 					return ErrInvalidCmdSuffix
 				}
 			}
+			if ed.ss < 1 || ed.tok == '\n' || ed.tok == EOF {
+				break
+			}
+		}
+		if ed.ss > 0 && ed.search == "" {
+			return ErrNoPrevPattern
+		} else if ed.ss&subGlobal > 0 {
+			nth = -1
+		}
+		delim = ed.tok
+		ed.token()
+		if delim == ' ' || delim == '\n' && ed.peek() == '\n' {
+			return ErrInvalidPatternDelim
+		}
+		var (
+			search  = ed.scanStringUntil(delim)
+			replace = ed.scanStringUntil(delim)
+			suffix  = ed.scanString()
+		)
+		if ed.ss&subRepeat > 0 {
+			search = ed.search
+			replace = ed.replacestr
+		}
+		if ed.ss&subPrint > 0 {
+			ed.cs |= cmdSuffixPrint
 		}
 		if search == "" {
 			if ed.search == "" {
@@ -739,83 +825,31 @@ func (ed *Editor) do() (err error) {
 			}
 			replace = ed.replacestr
 		}
-		re, err = regexp.Compile(search)
-		if err != nil {
-			return err
-		}
-		if err := ed.getCmdSuffix(); err != nil {
-			return err
+		for _, ch := range suffix {
+			switch {
+			case ch == '\n' || ch == EOF:
+				break
+			case unicode.IsDigit(ch):
+				nth, err = strconv.Atoi(string(ch))
+				if err != nil {
+					return ErrNumberOutOfRange
+				}
+			case ch == 'g':
+				nth = -1
+			case ch == 'p':
+				ed.cs |= cmdSuffixPrint
+			case ch == 'l':
+				ed.cs |= cmdSuffixList
+			case ch == 'n':
+				ed.cs |= cmdSuffixNumber
+			default:
+				return ErrInvalidCmdSuffix
+			}
 		}
 		if err := ed.check(ed.dot, ed.dot); err != nil {
 			return err
 		}
-		var subs int
-		for i := 0; i <= ed.end-ed.start; i++ {
-			if !re.MatchString(ed.lines[i]) {
-				continue
-			}
-			var (
-				submatch = re.FindAllStringSubmatch(ed.lines[i], -1)
-				matches  = re.FindAllStringIndex(ed.lines[i], nth)
-			)
-			for mn, match := range matches {
-				if nth > 1 && mn != nth-1 {
-					continue
-				}
-				var (
-					start = match[0]
-					end   = match[1]
-				)
-				var t = newTokenizer(strings.NewReader(replace))
-				t.token()
-				var r string
-				for t.tok != EOF {
-					if (t.tok != '\\' && t.peek() == '&') || (t.tokpos == 1 && t.tok == '&') {
-						if t.tokpos > 1 {
-							r += string(t.tok)
-							t.token()
-						}
-						t.token()
-						r += ed.lines[i][start:end]
-						continue
-					} else if t.tok == '\\' && unicode.IsDigit(t.peek()) {
-						t.token()
-						n, err := strconv.Atoi(string(t.tok))
-						if err != nil {
-							return ErrNumberOutOfRange
-						}
-						t.token()
-						r += submatch[0][n-1]
-						continue
-					}
-					r += string(t.tok)
-					t.token()
-				}
-				var replaced = ed.lines[i][:start] + re.ReplaceAllString(search, r) + ed.lines[i][end:]
-				action = append(action,
-					undoAction{typ: undoAdd,
-						start: i + 1,
-						end:   i + 1,
-						dot:   ed.dot,
-						lines: []string{ed.lines[i]},
-					})
-				action = append(action, undoAction{
-					typ:   undoDelete,
-					start: i + 1,
-					end:   i + 1,
-					lines: []string{replaced},
-				})
-				ed.lines[i] = replaced
-			}
-			ed.dot = i + 1
-			subs++
-		}
-		if subs == 0 && !ed.g {
-			return ErrNoMatch
-		} else if ed.cs&(cmdSuffixList|cmdSuffixNumber|cmdSuffixPrint) > 0 {
-			return ed.displayLines(ed.dot, ed.dot, ed.cs)
-		}
-		return nil
+		return ed.substitute(search, replace, nth, &action)
 	case 't':
 		ed.token()
 		if err := ed.check(ed.dot, ed.dot); err != nil {
@@ -896,12 +930,13 @@ func (ed *Editor) do() (err error) {
 			if err != nil {
 				return ErrNumberOutOfRange
 			}
-			// ed.token()
 		}
 		if err := ed.getCmdSuffix(); err != nil {
 			return err
 		}
-		return ed.displayLines(ed.end, min(len(ed.lines), ed.end+n), ed.cs)
+		var err = ed.displayLines(ed.end, min(len(ed.lines), ed.end+n), ed.cs)
+		ed.cs = 0
+		return err
 	case '=':
 		ed.token()
 		if err := ed.getCmdSuffix(); err != nil {

@@ -617,12 +617,15 @@ func TestCmdMove(t *testing.T) {
 func TestCmdPrompt(t *testing.T) {
 	var (
 		b   bytes.Buffer
-		ted = New(WithStdout(&b), WithStderr(&b))
+		ted = New(WithStdout(&b), WithStderr(io.Discard))
 	)
 	setupMemoryFile(ted, dummyFile)
 	ted.in = strings.NewReader("P#\n")
 	if err := ted.Do(); err != ErrInvalidCmdSuffix {
 		t.Fatalf("expected error %q, got %q", ErrInvalidCmdSuffix, err)
+	}
+	if ted.showPrompt == true {
+		t.Fatalf("expected show prompt to be %t, got %t", true, ted.showPrompt)
 	}
 	ted.in = strings.NewReader("Pp\n")
 	if err := ted.Do(); err != nil {
@@ -632,9 +635,17 @@ func TestCmdPrompt(t *testing.T) {
 	if b.String() != expect {
 		t.Fatalf("expected output %q, got %q", expect, b.String())
 	}
+	if ted.showPrompt == false {
+		t.Fatalf("expected show prompt to be %t, got %t", false, ted.showPrompt)
+	}
+	b.Reset()
+	ted.in = strings.NewReader("1\n")
+	if err := ted.Do(); err != nil {
+		t.Fatalf("expected error %v, got %q", nil, err)
+	}
 	expect = DefaultPrompt
-	if ted.prompt != expect {
-		t.Fatalf("expected the prompt to be %q, got %q", expect, ted.prompt)
+	if !strings.HasPrefix(b.String(), expect) {
+		t.Fatalf("expected the output to have the prompt %q, got %q", ted.prompt, b.String())
 	}
 }
 
@@ -727,70 +738,128 @@ func TestCmdSubstitute(t *testing.T) {
 		last = len(buf)
 	)
 	tests := []struct {
-		cmd            string
-		expect         position
-		expectedOutput string
-		expectedBuffer []string
-		err            error
+		cmd               []string
+		expect            position
+		expectedOutput    string
+		expectedBuffer    []string
+		err               error
+		expectedSubSuffix subSuffix
+		expectedCmdSuffix cmdSuffix
 	}{
 		{
-			cmd:            ",s/A/X/gp\n",
-			expectedBuffer: []string{"X X X X X", "X X X X X", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
-			expect:         position{start: 1, end: last, dot: 2, addrc: 2},
-			expectedOutput: "X X X X X\n",
+			cmd:               []string{",s/A/X/gp\n"},
+			expectedBuffer:    []string{"X X X X X", "X X X X X", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
+			expect:            position{start: 1, end: last, dot: 2, addrc: 2},
+			expectedOutput:    "X X X X X\n",
+			expectedCmdSuffix: cmdSuffixPrint,
 		},
 		{
-			cmd:            ",s/A/X/g\n",
+			cmd:            []string{",s/A/X/g\n"},
 			expectedBuffer: []string{"X X X X X", "X X X X X", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
 			expect:         position{start: 1, end: last, dot: 2, addrc: 2},
 		},
 		{
-			cmd:            "1s/A/X/\n",
+			cmd:            []string{"1s/A/X/\n"},
 			expectedBuffer: []string{"X A A A A", "A A A A A", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
 			expect:         position{start: 1, end: 1, dot: 1, addrc: 1},
 		},
 		{
-			cmd:            "1s/A/X/g\n",
+			cmd:            []string{"1s/A/X/g\n"},
 			expectedBuffer: []string{"X X X X X", "A A A A A", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
 			expect:         position{start: 1, end: 1, dot: 1, addrc: 1},
 		},
 		{
-			cmd:            "1s/A/X/3\n",
+			cmd:            []string{"1s/A/X/3\n"},
 			expectedBuffer: []string{"A A X A A", "A A A A A", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
 			expect:         position{start: 1, end: 1, dot: 1, addrc: 1},
 		},
 		{
-			cmd:            "1s/A/&X/3\n",
+			cmd:            []string{"1s/A/&X/3\n"},
 			expectedBuffer: []string{"A A AX A A", "A A A A A", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
 			expect:         position{start: 1, end: 1, dot: 1, addrc: 1},
 		},
 		{
-			cmd:            ",s/X/Y/g\n",
+			cmd:               []string{",s/A/z/p\n", ",s\n"},
+			expectedBuffer:    []string{"z z A A A", "z z A A A", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
+			expect:            position{start: 1, end: 8, dot: 2, addrc: 2},
+			expectedSubSuffix: subRepeat,
+			expectedOutput:    "z A A A A\n",
+		},
+		{
+			cmd:            []string{",s/X/Y/g\n"},
 			expectedBuffer: buf,
 			expect:         position{start: 1, end: last, dot: last, addrc: 2},
 			err:            ErrNoMatch,
 		},
 		{
-			cmd:            ",s//Y/\n",
+			cmd:            []string{",s//Y/\n"},
 			expectedBuffer: buf,
 			expect:         position{start: 1, end: last, dot: last, addrc: 2},
 			err:            ErrNoPrevPattern,
 		},
 		{
-			cmd:            ",s/X/%/\n",
+			cmd:            []string{",s/X/%/\n"},
 			expectedBuffer: buf,
 			expect:         position{start: 1, end: last, dot: last, addrc: 2},
 			err:            ErrNoPreviousSub,
 		},
+		{
+			cmd:               []string{",sg\n"},
+			expectedBuffer:    buf,
+			expect:            position{start: 1, end: last, dot: last, addrc: 2},
+			err:               ErrNoPrevPattern,
+			expectedSubSuffix: subGlobal,
+		},
+		{
+			cmd:               []string{",s\n"},
+			expectedBuffer:    buf,
+			expect:            position{start: 1, end: last, dot: last, addrc: 2},
+			err:               ErrNoPrevPattern,
+			expectedSubSuffix: subRepeat,
+		},
+		{
+			cmd:            []string{",s a z p"},
+			expectedBuffer: buf,
+			expect:         position{start: 1, end: last, dot: last, addrc: 2},
+			err:            ErrInvalidPatternDelim,
+		},
+		{
+			cmd:            []string{",s/A"},
+			expectedBuffer: []string{" A A A A", " A A A A", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
+			expect:         position{start: 1, end: last, dot: 2, addrc: 2},
+		},
+		{
+			cmd:               []string{",s/A/Z/p"},
+			expectedBuffer:    []string{"Z A A A A", "Z A A A A", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
+			expect:            position{start: 1, end: last, dot: 2, addrc: 2},
+			expectedOutput:    "Z A A A A\n",
+			expectedCmdSuffix: cmdSuffixPrint,
+		},
+		{
+			cmd:               []string{",s/A/B/p/"},
+			expectedBuffer:    buf,
+			expect:            position{start: 1, end: last, dot: last, addrc: 2},
+			err:               ErrInvalidCmdSuffix,
+			expectedCmdSuffix: cmdSuffixPrint,
+		},
+		{
+			cmd:               []string{",s/^A.*/&/gp"},
+			expectedBuffer:    buf,
+			expectedOutput:    "A A A A A\n",
+			expect:            position{start: 1, end: last, dot: 2, addrc: 2},
+			expectedCmdSuffix: cmdSuffixPrint,
+		},
 	}
 	for _, tt := range tests {
-		t.Run(string(tt.cmd), func(t *testing.T) {
+		t.Run(string(strings.Join(tt.cmd, "\n")), func(t *testing.T) {
 			b.Reset()
 			var ted = New(WithStdout(&b), WithStderr(io.Discard))
 			setupMemoryFile(ted, buf)
-			ted.in = strings.NewReader(tt.cmd)
-			if err := ted.Do(); err != tt.err {
-				t.Fatalf("expected error %q, got %q", tt.err, err)
+			for _, cmd := range tt.cmd {
+				ted.in = strings.NewReader(cmd)
+				if err := ted.Do(); err != tt.err {
+					t.Fatalf("expected error %q, got %q", tt.err, err)
+				}
 			}
 			got := position{
 				start: ted.start,
@@ -806,6 +875,12 @@ func TestCmdSubstitute(t *testing.T) {
 			}
 			if b.String() != tt.expectedOutput {
 				t.Fatalf("expected output: %q, got %q", tt.expectedOutput, b.String())
+			}
+			if ted.ss != tt.expectedSubSuffix {
+				t.Fatalf("expected substitution flags %d, got %d", tt.expectedSubSuffix, ted.ss)
+			}
+			if ted.cs != tt.expectedCmdSuffix {
+				t.Fatalf("expected command flags %d, got %d", tt.expectedCmdSuffix, ted.cs)
 			}
 		})
 	}
@@ -1129,12 +1204,12 @@ func TestCmdLineNumber(t *testing.T) {
 		{
 			cmd:    "=l\n",
 			init:   position{start: last, end: last, dot: last},
-			output: fmt.Sprint(last) + "$\n",
+			output: fmt.Sprint(last) + "\n" + dummyFile[last-1] + "$\n",
 		},
 		{
 			cmd:    "=p\n",
 			init:   position{start: last, end: last, dot: last, addrc: 2},
-			output: fmt.Sprint(last) + "\n",
+			output: fmt.Sprint(last) + "\n" + dummyFile[last-1] + "\n",
 		},
 	}
 	for _, tt := range tests {
