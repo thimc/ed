@@ -35,30 +35,27 @@ const (
 // getCmdSuffix extracts a command suffix which modifies the behaviour
 // of the original command.
 func (ed *Editor) getCmdSuffix() error {
-	for {
-		var found bool
-	loop:
+	var found bool
+	for !found {
+	check:
 		switch ed.tok {
 		case 'p':
 			ed.cs |= cmdSuffixPrint
 			ed.token()
 			found = true
-			goto loop
+			goto check
 		case 'l':
 			ed.cs |= cmdSuffixList
 			ed.token()
 			found = true
-			goto loop
+			goto check
 		case 'n':
 			ed.cs |= cmdSuffixNumber
 			ed.token()
 			found = true
-			goto loop
+			goto check
 		default:
 			found = true
-		}
-		if found {
-			break
 		}
 	}
 	if ed.tok != '\n' && ed.tok != EOF {
@@ -122,19 +119,16 @@ func (ed *Editor) global(r rune) error {
 		tokenizer   = ed.tokenizer
 		search, cmd string
 	)
-	// TODO(thimc): The V and G commands take a suffix
-	// according to the spec.  Doing this now will result
-	// in "invalid command suffix" error.
-	// if interactive {
-	// 	if err := ed.getCmdSuffix(); err != nil {
-	// 		return err
-	// 	}
-	// }
+	if interactive {
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+	}
 	var delim = ed.tok
-	ed.token()
-	if delim == ' ' || delim == '\n' {
+	if delim == ' ' || delim == '\n' || delim == EOF {
 		return ErrInvalidPatternDelim
 	}
+	ed.token()
 	var s, e = ed.start, ed.end
 	search = ed.scanStringUntil(delim)
 	if ed.tok != EOF && ed.tok != '\n' {

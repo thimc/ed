@@ -314,6 +314,13 @@ func TestCmdGlobal(t *testing.T) {
 			expectedBuffer: buffer,
 			err:            ErrInvalidPatternDelim,
 		},
+		{
+			cmd:            ",g\n",
+			init:           position{start: last, end: last, dot: last},
+			expect:         position{start: 1, end: last, dot: last, addrc: 2},
+			expectedBuffer: buffer,
+			err:            ErrInvalidPatternDelim,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.cmd), func(t *testing.T) {
