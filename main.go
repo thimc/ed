@@ -22,8 +22,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -36,21 +38,24 @@ var (
 
 func main() {
 	flag.Parse()
-	var (
-		args    = os.Args[1:]
-		options = []OptionFunc{WithPrompt(*prompt), WithScripted(*scripted)}
-	)
-	for n, arg := range args {
+	var args = flag.Args()
+	for n, arg := range os.Args {
 		if arg == "-" {
 			*scripted = true
-			args = append(args[:n], args[n+1:]...)
+			args = append(args[:n-1], args[n:]...)
 		}
 	}
+	var options = []OptionFunc{WithPrompt(*prompt), WithScripted(*scripted)}
 	if len(args) == 1 {
 		options = append(options, WithFile(args[0]))
 	}
 	for ed := New(options...); ; {
 		if err := ed.Do(); err != nil {
+			if errors.Is(err, io.EOF) {
+				if fi, _ := os.Stdout.Stat(); (fi.Mode() & os.ModeCharDevice) != 1 {
+					break
+				}
+			}
 			fmt.Fprintln(os.Stderr, err)
 		}
 	}

@@ -190,24 +190,26 @@ func WithFile(path string) OptionFunc {
 // WithScripted overrides the default silent mode of the editor. This mode
 // is meant to be used with ed scripts.
 func WithScripted(b bool) OptionFunc {
-	// TODO(thimc): Ed scripts are probably not fully supported yet.
 	return func(ed *Editor) {
 		ed.scripted = b
 	}
 }
 
-// Do reads expects data from the `in io.Reader` and reads until EOF.
+// Do reads expects data from the `in io.Reader` and reads until rune `EOF`.
 // After which it parses the user input for addresses (if any) and finally
 // executes the command (if any). If the prompt is enabled it is printed
 // to the `err io.Writer` before any data is read. If the internal
 // state of the editor is to not explain errors then if any errors are
 // encountered they are automatically defaulted to [ErrDefault].
+// Do returns the error io.EOF if the in reader is empty.
 func (ed *Editor) Do() error {
 	if ed.showPrompt {
 		fmt.Fprint(ed.out, ed.prompt)
 	}
 	ed.tokenizer = newTokenizer(ed.in)
-	ed.token()
+	if ed.token() == EOF && ed.peek() == EOF {
+		return io.EOF
+	}
 	if err := ed.parse(); err != nil {
 		ed.error = err
 		if !ed.printErrors {
