@@ -223,7 +223,6 @@ func (ed *Editor) deleteLines(start, end int, action *[]undoAction) error {
 	})
 	ed.lines = append(ed.lines[:start-1], ed.lines[end:]...)
 	ed.dot = start - 1
-	ed.start = min(start, len(ed.lines))
 	ed.modified = true
 	return nil
 }
@@ -235,7 +234,6 @@ loop:
 		case <-ed.sigintch:
 			return ed.interrupt()
 		default:
-			ed.dot = start
 			line, err := ed.tokenizer.ReadString('\n')
 			if err != nil {
 				break loop
@@ -259,6 +257,7 @@ loop:
 				dot:   ed.dot,
 				lines: ed.lines[start-1 : start],
 			})
+			ed.dot = start
 			ed.modified = true
 		}
 	}
