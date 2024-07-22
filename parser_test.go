@@ -178,4 +178,37 @@ func TestParser(t *testing.T) {
 			}
 		})
 	}
+
+	tests2 := []struct {
+		cmd    string
+		expect position
+	}{
+		{cmd: "/F/\n", expect: position{start: 6, end: 6, dot: 52, addrc: 1}},
+		{cmd: "//\n", expect: position{start: 32, end: 32, dot: 6, addrc: 1}},
+		{cmd: "//\n", expect: position{start: 6, end: 6, dot: 32, addrc: 1}},
+		{cmd: "?D?\n", expect: position{start: 4, end: 4, dot: 6, addrc: 1}},
+		{cmd: "??\n", expect: position{start: 30, end: 30, dot: 4, addrc: 1}},
+		{cmd: "??\n", expect: position{start: 4, end: 4, dot: 30, addrc: 1}},
+	}
+	var ted = New(WithStdout(io.Discard), WithStderr(io.Discard))
+	setupMemoryFile(ted, append(dummyFile, dummyFile...))
+	for _, tt := range tests2 {
+		t.Run(tt.cmd, func(t *testing.T) {
+			ted.in = strings.NewReader(tt.cmd)
+			ted.tokenizer = newTokenizer(ted.in)
+			ted.token()
+			if err := ted.parse(); err != nil {
+				t.Fatalf("parse: %q", err)
+			}
+			got := position{start: ted.start, end: ted.end, dot: ted.dot, addrc: ted.addrc}
+			if !reflect.DeepEqual(got, tt.expect) {
+				t.Fatalf("expected %+v, got %+v", tt.expect, got)
+			}
+			// TODO(thimc): To avoid executing Do() in the Parser tests we explicitly
+			// set the dot to the start address which is usually done in do() in the
+			// case where we don't have a follow up command, i.e the token being '\n'.
+			ted.dot = ted.start
+		})
+	}
+
 }

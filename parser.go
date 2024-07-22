@@ -111,29 +111,36 @@ func (ed *Editor) nextAddress() (int, error) {
 			}
 			ed.search = search
 			var (
-				last  = len(ed.lines)
-				s     = 0
-				e     = last
 				found bool
+				i     = ed.dot
 			)
-			if mod == '?' {
-				s = last - 1
-				e = 0
+			if len(ed.lines) < 1 {
+				return -1, ErrNoMatch
 			}
-			for i := s; i != e; {
+			if mod != '/' {
+				i--
+			}
+			for {
+				if mod == '/' {
+					i++
+				} else {
+					i--
+					if i < 0 {
+						i = len(ed.lines) - 1
+					}
+				}
+				i %= len(ed.lines)
 				match, err := regexp.MatchString(search, ed.lines[i])
 				if err != nil {
-					return 0, ErrNoMatch
+					return -1, ErrNoMatch
 				}
 				if match {
 					addr = i + 1
 					found = true
 					break
 				}
-				if mod == '/' {
-					i++
-				} else {
-					i--
+				if i == ed.dot {
+					break
 				}
 			}
 			if !found {
