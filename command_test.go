@@ -626,6 +626,7 @@ func TestCmdMove(t *testing.T) {
 		init           position
 		expect         position
 		expectedBuffer string
+		err            error
 	}{
 		{
 			cmd:            "1,5m9\n",
@@ -634,16 +635,17 @@ func TestCmdMove(t *testing.T) {
 			expect:         position{start: 1, end: 5, dot: 9, addrc: 1},
 			expectedBuffer: "F\nG\nH\nI\nA\nB\nC\nD\nE\nJ\nK\nL\nM\nN\nO\nP\nQ\nR\nS\nT\nU\nV\nW\nX\nY\nZ",
 		},
+		{cmd: "m\n", buffer: []string{""}, expectedBuffer: "", err: ErrInvalidAddress},
 	}
 	for _, tt := range tests {
 		t.Run(tt.cmd, func(t *testing.T) {
 			b.Reset()
 			setupMemoryFile(ted, tt.buffer)
 			setPosition(ted, tt.init)
-			ted.in = strings.NewReader(tt.cmd + "\n")
+			ted.in = strings.NewReader(tt.cmd)
 			ted.tokenizer = nil
-			if err := ted.Do(); err != nil {
-				t.Errorf("expected no error, got %q", err)
+			if err := ted.Do(); err != tt.err {
+				t.Errorf("expected error %q, got %q", tt.err, err)
 			}
 			got := position{
 				start: ted.start,
@@ -724,24 +726,23 @@ func TestCmdRead(t *testing.T) {
 		err    error
 	}{
 		{
-			cmd: "r#\n",
-			err: ErrUnexpectedCmdSuffix,
-		},
-		{
-			cmd: "r\n",
-			err: ErrNoFileName,
-		},
-		{
 			cmd:    "r " + path + "\n",
 			buffer: dummyFile,
 			output: fmt.Sprint(len(dummyFile)*2) + "\n",
 		},
+		{cmd: "r#\n", buffer: dummyFile, err: ErrUnexpectedCmdSuffix},
+		{cmd: "r\n", buffer: dummyFile, err: ErrNoFileName},
+		{cmd: "r non-existing-file\n", buffer: dummyFile, err: ErrCannotOpenFile},
+		{cmd: "r  file-name\n", buffer: dummyFile, err: ErrInvalidFileName},
 	}
 	for _, tt := range tests {
 		t.Run(tt.cmd, func(t *testing.T) {
 			b.Reset()
 			ted.in = strings.NewReader(tt.cmd)
 			ted.tokenizer = nil
+			if tt.err != nil {
+				ted.path = ""
+			}
 			if err := ted.Do(); err != tt.err {
 				t.Fatalf("expected error %q, got %q", tt.err, err)
 			}
@@ -943,10 +944,6 @@ func TestCmdSubstitute(t *testing.T) {
 }
 
 func TestCmdScroll(t *testing.T) {
-	var (
-		b   bytes.Buffer
-		ted = New(WithStdout(&b), WithStderr(&b))
-	)
 	tests := []struct {
 		cmd            string
 		buffer         []string
@@ -969,10 +966,18 @@ func TestCmdScroll(t *testing.T) {
 			expect: position{start: 1, end: 2, dot: len(dummyFile), addrc: 1},
 			err:    ErrNumberOutOfRange,
 		},
+		{
+			cmd:    "z\n",
+			expect: position{start: 1, end: 1, dot: 0, addrc: 0},
+			err:    ErrInvalidAddress,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.cmd, func(t *testing.T) {
-			b.Reset()
+			var (
+				b   bytes.Buffer
+				ted = New(WithStdout(&b), WithStderr(&b))
+			)
 			setupMemoryFile(ted, tt.buffer)
 			setPosition(ted, tt.init)
 			ted.in = strings.NewReader(tt.cmd)
@@ -1148,11 +1153,7 @@ func TestCmdWrite(t *testing.T) {
 	// TODO(thimc): Add test cases for the write command with an
 	// unexpected command suffix and a test where no path is provided.
 	// Also add tests for 'wq' and 'Wq'.
-	var (
-		b    bytes.Buffer
-		ted  = New(WithStdout(&b), WithStderr(&b))
-		path = "dummy_write"
-	)
+	var path = "dummy_write"
 	os.Remove(path)
 	defer os.Remove(path)
 	tests := []struct {
@@ -1181,6 +1182,14 @@ func TestCmdWrite(t *testing.T) {
 			expectedContent: "A\nB\nC\n",
 		},
 		{
+			cmd:             []string{"1w " + path + "\n", "f " + path + "\n", "2,3W\n"},
+			buffer:          dummyFile,
+			init:            position{start: len(dummyFile), end: len(dummyFile), dot: len(dummyFile)},
+			expect:          position{start: 2, end: 3, dot: len(dummyFile), addrc: 2},
+			expectedOutput:  "2\n" + path + "\n4\n",
+			expectedContent: "A\nB\nC\n",
+		},
+		{
 			cmd:             []string{"1,5w " + path + "\n"},
 			buffer:          dummyFile,
 			init:            position{start: len(dummyFile), end: len(dummyFile), dot: len(dummyFile)},
@@ -1188,17 +1197,21 @@ func TestCmdWrite(t *testing.T) {
 			expectedOutput:  "10\n",
 			expectedContent: "A\nB\nC\nD\nE\n",
 		},
-		{
-			cmd: []string{"Wno"},
-			err: ErrUnexpectedCmdSuffix,
-		},
+		{cmd: []string{"w \n"}, err: ErrNoFileName},
+		{cmd: []string{"Wno\n"}, err: ErrUnexpectedCmdSuffix},
 	}
 	for _, tt := range tests {
 		os.Remove(path)
 		t.Run(strings.Join(tt.cmd, "\n"), func(t *testing.T) {
-			b.Reset()
-			setupMemoryFile(ted, tt.buffer)
-			setPosition(ted, tt.init)
+			var (
+				b   bytes.Buffer
+				ted = New(WithStdout(&b), WithStderr(&b))
+			)
+			ted.printErrors = true
+			if tt.err == nil {
+				setupMemoryFile(ted, tt.buffer)
+				setPosition(ted, tt.init)
+			}
 			for _, cmd := range tt.cmd {
 				ted.in = strings.NewReader(cmd)
 				ted.tokenizer = nil
@@ -1293,6 +1306,11 @@ func TestCmdLineNumber(t *testing.T) {
 			cmd:    "=p\n",
 			init:   position{start: last, end: last, dot: last, addrc: 2},
 			output: fmt.Sprint(last) + "\n" + dummyFile[last-1] + "\n",
+		},
+		{
+			cmd:    "2,3=\n",
+			init:   position{start: last, end: last, dot: last},
+			output: "3\n",
 		},
 		{cmd: "==\n", err: ErrInvalidCmdSuffix},
 	}

@@ -744,9 +744,7 @@ func (ed *Editor) do() (err error) {
 				return ErrNoFileName
 			}
 		}
-		if path[0] == ' ' {
-			path = path[1:]
-		}
+		path = strings.TrimPrefix(path, " ")
 		if err := ed.getCmdSuffix(); err != nil {
 			return err
 		}
@@ -942,7 +940,7 @@ func (ed *Editor) do() (err error) {
 			return err
 		}
 		var n = ed.end
-		if ed.addrc > 1 {
+		if ed.addrc < 1 {
 			n = len(ed.lines)
 		}
 		fmt.Fprintln(ed.out, n)
