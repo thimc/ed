@@ -45,6 +45,7 @@ var (
 	ErrCryptUnavailable    = errors.New("crypt unavailable")
 	ErrCannotNestGlobal    = errors.New("cannot nest global commands")
 	ErrCannotOpenFile      = errors.New("cannot open input file")
+	ErrCannotWriteFile     = errors.New("cannot write file")
 	ErrCannotCloseFile     = errors.New("cannot close input file")
 	ErrCannotReadFile      = errors.New("cannot read input file")
 	ErrDestinationExpected = errors.New("destination expected")
@@ -195,19 +196,22 @@ func WithScripted(b bool) OptionFunc {
 	}
 }
 
-// Do reads expects data from the `in io.Reader` and reads until rune `EOF`.
-// After which it parses the user input for addresses (if any) and finally
-// executes the command (if any). If the prompt is enabled it is printed
-// to the `err io.Writer` before any data is read. If the internal
-// state of the editor is to not explain errors then if any errors are
-// encountered they are automatically defaulted to [ErrDefault].
+// Do reads expects data from the `in io.Reader` and reads until newline
+// or EOF.  After which it parses the user input for addresses (if any)
+// and finally executes the command (if any). If the prompt is enabled
+// it is printed to the `err io.Writer` before any data is read. If the
+// internal state of the editor is to not explain errors then if any
+// errors are encountered they are automatically defaulted to [ErrDefault].
 // Do returns the error io.EOF if the in reader is empty.
 func (ed *Editor) Do() error {
 	if ed.showPrompt {
 		fmt.Fprint(ed.out, ed.prompt)
 	}
-	ed.tokenizer = newTokenizer(ed.in)
-	if ed.token() == EOF {
+	if ed.tokenizer == nil {
+		ed.tokenizer = newTokenizer(ed.in)
+	}
+	ed.token()
+	if ed.tok == EOF {
 		if ed.scripted || !ed.modified {
 			return io.EOF
 		}
@@ -232,6 +236,9 @@ func (ed *Editor) Do() error {
 				return ErrDefault
 			}
 		}
+	}
+	if ed.scripted && ed.tok == '\n' && ed.peek() != EOF {
+		return ed.Do()
 	}
 	return ed.error
 }

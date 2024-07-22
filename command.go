@@ -427,13 +427,16 @@ func (ed *Editor) writeFile(path string, mod rune, start, end int) error {
 	}
 	defer file.Close()
 	var siz int
-	for i := start - 1; i < end; i++ {
-		var line string = ed.lines[i]
-		_, err := file.WriteString(line + "\n")
-		if err != nil {
-			return err
+	if start >= 1 {
+		start--
+	}
+	for i := start; i != end; i++ {
+		var line string = ed.lines[i] + "\n"
+		n, err := file.WriteString(line)
+		if err != nil || n != len(line) {
+			return ErrCannotWriteFile
 		}
-		siz += len(line) + 1
+		siz += len(line)
 	}
 	ed.modified = false
 	if !ed.scripted {
@@ -868,33 +871,37 @@ func (ed *Editor) do() (err error) {
 		return ed.undo()
 	case 'W', 'w':
 		var (
-			t    = ed.tok
-			mod  = ed.token()
+			mod  = ed.tok
+			quit = ed.token()
 			path string
 		)
-		if !unicode.IsSpace(ed.tok) {
+		if !unicode.IsSpace(quit) && quit != 'Q' && quit != 'q' {
 			return ErrUnexpectedCmdSuffix
-		} else if path = ed.scanString(); path == "" {
+		}
+		ed.token()
+		path = ed.scanString()
+		if path == "" {
 			if ed.path == "" {
 				return ErrNoFileName
 			}
-		}
-		if path[0] == ' ' {
-			path = path[1:]
+			path = ed.path
 		}
 		if ed.addrc == 0 && len(ed.lines) < 1 {
 			ed.start = 0
 			ed.end = 0
+		} else if err := ed.check(1, len(ed.lines)); err != nil {
+			return err
 		}
 		if err := ed.getCmdSuffix(); err != nil {
 			return err
 		}
-		if err := ed.writeFile(path, t, ed.start, ed.end); err != nil {
+		if err := ed.writeFile(path, mod, ed.start, ed.end); err != nil {
 			return err
-		} else if path[0] != '!' {
+		}
+		if path[0] != '!' {
 			ed.modified = false
-			return nil
-		} else if ed.modified && !ed.scripted && mod == 'q' {
+		}
+		if !ed.modified && quit == 'q' {
 			os.Exit(0)
 		}
 		return nil
