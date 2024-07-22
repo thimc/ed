@@ -207,8 +207,11 @@ func (ed *Editor) Do() error {
 		fmt.Fprint(ed.out, ed.prompt)
 	}
 	ed.tokenizer = newTokenizer(ed.in)
-	if ed.token() == EOF && ed.peek() == EOF {
-		return io.EOF
+	if ed.token() == EOF {
+		if ed.scripted || !ed.modified {
+			return io.EOF
+		}
+		ed.tok = 'q'
 	}
 	if err := ed.parse(); err != nil {
 		ed.error = err
