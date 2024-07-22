@@ -283,6 +283,7 @@ func (ed *Editor) shell(cmd string) ([]string, error) {
 	for i, line := range lines {
 		result[i] = string(line)
 	}
+	ed.shellCmd = cmd
 	return result[:len(result)-1], nil
 }
 
