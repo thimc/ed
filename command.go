@@ -910,7 +910,6 @@ func (ed *Editor) do() (err error) {
 	case 'z':
 		ed.token()
 		ed.start = 1
-		var n int
 		if err := ed.check(ed.start, ed.dot+1); err != nil {
 			return err
 		} else if unicode.IsDigit(ed.tok) {
@@ -920,7 +919,7 @@ func (ed *Editor) do() (err error) {
 				ed.token()
 			}
 			var err error
-			n, err = strconv.Atoi(s)
+			ed.scroll, err = strconv.Atoi(s)
 			if err != nil {
 				return ErrNumberOutOfRange
 			}
@@ -928,7 +927,7 @@ func (ed *Editor) do() (err error) {
 		if err := ed.getCmdSuffix(); err != nil {
 			return err
 		}
-		var err = ed.displayLines(ed.end, min(len(ed.lines), ed.end+n), ed.cs)
+		var err = ed.displayLines(ed.end, min(len(ed.lines), ed.end+ed.scroll), ed.cs)
 		ed.cs = 0
 		return err
 	case '=':
