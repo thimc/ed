@@ -27,8 +27,6 @@ func setupMemoryFile(ed *Editor, buf []string) {
 	copy(ed.lines, buf)
 	ed.path = "test"
 	ed.dot = len(buf)
-	ed.start = ed.dot
-	ed.end = ed.dot
 	ed.printErrors = true
 }
 
@@ -140,6 +138,11 @@ func TestParser(t *testing.T) {
 			cmd:    "?D?,?B?+",
 			init:   position{start: last, end: last, dot: last},
 			expect: position{start: 4, end: 3, dot: last, addrc: 2},
+		},
+		{
+			cmd:    "/^A$/,/^D$/+",
+			init:   position{start: last, end: last, dot: last},
+			expect: position{start: 1, end: 5, dot: last, addrc: 2},
 		},
 
 		// Error cases, some of these positions that are expected do not make
