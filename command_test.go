@@ -309,8 +309,7 @@ func TestCmdFile(t *testing.T) {
 
 func TestCmdGlobal(t *testing.T) {
 	var (
-		ted    = New(WithStdout(io.Discard), WithStderr(io.Discard))
-		buffer = dummyFile
+		buffer = dummyFile[:3]
 		last   = len(buffer)
 	)
 	tests := []struct {
@@ -318,19 +317,53 @@ func TestCmdGlobal(t *testing.T) {
 		init           position
 		expect         position
 		expectedBuffer []string
+		expectedOutput string
 		err            error
 	}{
 		{
-			cmd:            "g	A	d\n",
+			cmd:            "g/nonexisting/d",
 			init:           position{start: last, end: last, dot: last},
+			expect:         position{start: 1, end: last, dot: last, addrc: 0},
+			expectedBuffer: buffer,
+		},
+		{
+			cmd:            "g/.*/",
+			init:           position{start: last, end: last, dot: last},
+			expect:         position{start: last, end: last, dot: last},
+			expectedBuffer: buffer,
+			expectedOutput: "A\nB\nC\n",
+		},
+		{
+			cmd:            "g/F/s/F/test/",
+			init:           position{start: last, end: last, dot: last},
+			expect:         position{start: 1, end: last, dot: last},
+			expectedBuffer: buffer,
+		},
+		{
+			cmd:            "g	A	d\n",
 			expect:         position{start: 1, end: 1, dot: 1, addrc: 0},
 			expectedBuffer: buffer[1:],
 		},
 		{
 			cmd:            "v/A/d\n",
-			init:           position{start: last, end: last, dot: last},
-			expect:         position{start: 2, end: 2, dot: 2, addrc: 0},
+			expect:         position{start: 2, end: 2, dot: 1, addrc: 0},
 			expectedBuffer: buffer[:1],
+		},
+		{
+			cmd:            "G/B/\n",
+			expect:         position{start: 1, end: last, dot: 2, addrc: 0},
+			expectedBuffer: buffer,
+		},
+		{
+			cmd:            "V/B/\n",
+			expect:         position{start: 1, end: last, dot: last, addrc: 0},
+			expectedBuffer: buffer,
+		},
+		{
+			cmd:            "V/B/\np\nn\n",
+			expect:         position{start: last, end: last, dot: last, addrc: 0},
+			expectedBuffer: buffer,
+			expectedOutput: "A\n3\tC\n",
 		},
 		{
 			cmd:            "v\n",
@@ -353,11 +386,20 @@ func TestCmdGlobal(t *testing.T) {
 			expectedBuffer: buffer,
 			err:            ErrInvalidPatternDelim,
 		},
+		{
+			cmd:            "G|B|\n&\n",
+			expect:         position{start: 1, end: last, dot: 2},
+			expectedBuffer: buffer,
+			err:            ErrNoPreviousCmd,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.cmd), func(t *testing.T) {
+			var (
+				b   bytes.Buffer
+				ted = New(WithStdout(&b), WithStderr(io.Discard))
+			)
 			setupMemoryFile(ted, buffer)
-			setPosition(ted, tt.init)
 			ted.in = strings.NewReader(tt.cmd)
 			ted.tokenizer = nil
 			if err := ted.Do(); err != tt.err {
@@ -373,7 +415,10 @@ func TestCmdGlobal(t *testing.T) {
 				t.Errorf("expected %+v, got %+v", tt.expect, got)
 			}
 			if !reflect.DeepEqual(tt.expectedBuffer, ted.lines) {
-				t.Fatalf("expected %q, got %q", tt.expectedBuffer, ted.lines)
+				t.Errorf("expected %q, got %q", tt.expectedBuffer, ted.lines)
+			}
+			if b.String() != tt.expectedOutput {
+				t.Fatalf("expected output %q, got %q", tt.expectedOutput, b.String())
 			}
 		})
 	}
@@ -406,19 +451,28 @@ func TestCmdHelp(t *testing.T) {
 
 func TestCmdHelpToggle(t *testing.T) {
 	var (
-		ted    = New(WithStdin(strings.NewReader("2H\n")), WithStdout(io.Discard), WithStderr(io.Discard))
-		expect = ErrNoFileName
+		ted = New(WithStdout(io.Discard), WithStderr(io.Discard))
 	)
-	expect = ErrDefault
-	if err := ted.Do(); err != expect {
-		t.Fatalf("expected error %q, got %q", expect, err)
+	tests := []struct {
+		cmd string
+		err error
+	}{
+		{cmd: "2H\n", err: ErrDefault},
+		{cmd: "H\n", err: ErrUnexpectedAddress},
+		{cmd: "3H\n", err: ErrUnexpectedAddress},
+		{cmd: "H=\n", err: ErrInvalidCmdSuffix},
+		{cmd: "H\n", err: ErrDefault},
 	}
 	setupMemoryFile(ted, dummyFile)
-	ted.in = strings.NewReader("5H\n")
-	ted.tokenizer = nil
-	expect = ErrUnexpectedAddress
-	if err := ted.Do(); err != expect {
-		t.Fatalf("expected error %q, got %q", expect, err)
+	ted.printErrors = false
+	for _, tt := range tests {
+		t.Run(tt.cmd, func(t *testing.T) {
+			ted.in = strings.NewReader(tt.cmd)
+			ted.tokenizer = nil
+			if err := ted.Do(); err != tt.err {
+				t.Fatalf("expected error %q, got %q", tt.err, err)
+			}
+		})
 	}
 }
 

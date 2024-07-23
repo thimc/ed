@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -116,95 +115,85 @@ func (ed *Editor) global(r rune) error {
 	var (
 		interactive = (r == 'G' || r == 'V')
 		invert      = (r == 'v' || r == 'V')
-		tokenizer   = ed.tokenizer
-		search, cmd string
+		search      string
+		cmdlist     string
+		delim       rune
+		marked      []int
+		t           tokenizer
 	)
-	if interactive {
-		if err := ed.getCmdSuffix(); err != nil {
-			return err
-		}
-	}
-	var delim = ed.tok
+	// if interactive {
+	// 	if err := ed.getCmdSuffix(); err != nil {
+	// 		return err
+	// 	}
+	// }
+	delim = ed.tok
 	if delim == ' ' || delim == '\n' || delim == EOF {
 		return ErrInvalidPatternDelim
 	}
 	ed.token()
-	var s, e = ed.start, ed.end
 	search = ed.scanStringUntil(delim)
 	if ed.tok != EOF && ed.tok != '\n' {
-		cmd = ed.scanString()
-		if strings.HasSuffix(cmd, string(delim)) {
-			cmd = cmd[:len(cmd)-1]
+		cmdlist = ed.scanString()
+	}
+	if !interactive {
+		cmdlist = strings.TrimSuffix(cmdlist, string(delim))
+		if !interactive && (cmdlist == "" || cmdlist == "\n") {
+			cmdlist = "p"
+		}
+	}
+	re, err := regexp.Compile(search)
+	if err != nil {
+		return err
+	}
+	for i, ln := range ed.lines {
+		if re.MatchString(ln) != invert {
+			marked = append(marked, i+1)
 		}
 	}
 	defer func() {
 		ed.g = false
-		ed.tokenizer = tokenizer
+		ed.tokenizer = &t
 		ed.undohist = append(ed.undohist, ed.globalUndo)
-		ed.globalCmd = cmd
+		ed.globalCmd = cmdlist
 	}()
-	for idx := s - 1; idx <= e; idx++ {
-		if idx >= len(ed.lines) {
-			continue
+	for _, i := range marked {
+		if ed.tok == '\n' {
+			ed.token()
 		}
-		matched, err := regexp.MatchString(search, ed.lines[idx])
-		if err != nil {
-			return err
-		}
-		if (!invert && !matched) || (invert && matched) {
-			continue
-		}
-		if cmd == "" && !interactive {
-			cmd = "p"
+		t = *ed.tokenizer
+		ed.dot = i
+		if ed.dot >= len(ed.lines) {
+			i = len(ed.lines)
+			ed.dot = i
 		}
 		if interactive {
+			ln := ed.scanStringUntil('\n')
+			if ln == "" {
+				continue
+			} else if ln == "&" || ln == "&\n" {
+				if ed.globalCmd == "" {
+					return ErrNoPreviousCmd
+				}
+				ln = ed.globalCmd
+			}
+			t = *ed.tokenizer
+			cmdlist = ln
+		}
+		ed.tokenizer = newTokenizer(strings.NewReader(cmdlist))
+		ed.token()
+		if err := ed.parse(); err != nil {
+			return err
+		}
+		if err := ed.do(); err != nil {
+			return err
+		}
+		if ed.cs > 0 {
 			if err := ed.displayLines(ed.dot, ed.dot, ed.cs); err != nil {
 				return err
 			}
-			r := bufio.NewReader(ed.in)
-		input:
-			for {
-				select {
-				case <-ed.sigintch:
-					return ed.interrupt()
-				default:
-					ln, err := r.ReadString('\n')
-					if err != nil {
-						return err
-					}
-					if len(ln) > 1 {
-						ln = ln[:len(ln)-1]
-					}
-					cmd = ln
-					if cmd == "&" {
-						if ed.globalCmd == "" {
-							return ErrNoPreviousCmd
-						}
-						cmd = ed.globalCmd
-					}
-					break input
-				}
-			}
 		}
-		for _, c := range strings.Split(cmd, "\\") {
-			ed.dot = idx + 1
-			ed.start = ed.dot
-			ed.end = ed.dot
-			ed.tokenizer = newTokenizer(strings.NewReader(c + "\n"))
-			ed.token()
-			ed.g = true
-			if err = ed.do(); err != nil {
-				return err
-			}
-			if e >= len(ed.lines) {
-				e = len(ed.lines) - 1
-				idx--
-			}
-		}
-
+		ed.tokenizer = &t
 	}
-	ed.start = ed.dot
-	ed.end = ed.dot
 	return nil
 }
 
@@ -564,9 +553,10 @@ func (ed *Editor) do() (err error) {
 		if err := ed.deleteLines(ed.start, ed.end, &action); err != nil {
 			return err
 		}
-		ed.dot += 1
-		if addr := ed.dot; addr > len(ed.lines) {
-			ed.dot = addr
+		if addr := ed.dot + 1; addr > len(ed.lines) {
+			ed.dot = 1
+		} else {
+			ed.dot++
 		}
 		return nil
 	case 'E', 'e':
