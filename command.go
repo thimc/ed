@@ -132,10 +132,10 @@ func (ed *Editor) global(r rune) error {
 	}
 	ed.token()
 	search = ed.scanStringUntil(delim)
-	if ed.tok != EOF && ed.tok != '\n' {
-		cmdlist = ed.scanString()
-	}
 	if !interactive {
+		if ed.tok != EOF && ed.tok != '\n' {
+			cmdlist = ed.scanString()
+		}
 		cmdlist = strings.TrimSuffix(cmdlist, string(delim))
 		if !interactive && (cmdlist == "" || cmdlist == "\n") {
 			cmdlist = "p"
@@ -156,6 +156,7 @@ func (ed *Editor) global(r rune) error {
 		ed.undohist = append(ed.undohist, ed.globalUndo)
 		ed.globalCmd = cmdlist
 	}()
+	ed.g = true
 	for _, i := range marked {
 		if ed.tok == '\n' {
 			ed.token()

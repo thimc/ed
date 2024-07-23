@@ -203,12 +203,8 @@ func TestCmdEdit(t *testing.T) {
 			expectedBuffer: dummyFile,
 			err:            ErrUnexpectedAddress,
 		},
-		{
-			cmd:            "e\n",
-			buffer:         nil,
-			expectedBuffer: nil,
-			err:            ErrNoFileName,
-		},
+		{cmd: "e\n", buffer: nil, expectedBuffer: nil, err: ErrNoFileName},
+		{cmd: "e|\n", buffer: nil, expectedBuffer: nil, err: ErrUnexpectedCmdSuffix},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.cmd), func(t *testing.T) {
@@ -391,6 +387,12 @@ func TestCmdGlobal(t *testing.T) {
 			expect:         position{start: 1, end: last, dot: 2},
 			expectedBuffer: buffer,
 			err:            ErrNoPreviousCmd,
+		},
+		{
+			cmd:            "g/C/g\n",
+			expect:         position{start: last, end: last, dot: last},
+			expectedBuffer: buffer,
+			err:            ErrCannotNestGlobal,
 		},
 	}
 	for _, tt := range tests {
