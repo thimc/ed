@@ -38,7 +38,11 @@ var (
 
 func main() {
 	flag.Parse()
-	var args = flag.Args()
+	fi, _ := os.Stdin.Stat()
+	var (
+		args     = flag.Args()
+		terminal = (fi.Mode() & os.ModeCharDevice) > 0
+	)
 	for n, arg := range os.Args {
 		if arg == "-" {
 			*scripted = true
@@ -47,14 +51,14 @@ func main() {
 	}
 	var options = []OptionFunc{WithPrompt(*prompt), WithScripted(*scripted)}
 	if len(args) == 1 {
+		// TODO(thimc): Support "binary mode" which replaces all
+		// instances of the NULL or nil token with a newline.
 		options = append(options, WithFile(args[0]))
 	}
 	for ed := New(options...); ; {
 		if err := ed.Do(); err != nil {
-			if errors.Is(err, io.EOF) {
-				if fi, _ := os.Stdout.Stat(); (fi.Mode() & os.ModeCharDevice) != 1 {
-					break
-				}
+			if errors.Is(err, io.EOF) && !terminal {
+				break
 			}
 			fmt.Fprintln(os.Stderr, err)
 		}
