@@ -251,7 +251,7 @@ func (ed *Editor) Do() error {
 			}
 		}
 	}
-	if ed.scripted && ed.tok == '\n' && ed.peek() != EOF {
+	if ed.scripted {
 		ed.lineno++
 		return ed.Do()
 	}

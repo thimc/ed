@@ -34,27 +34,20 @@ const (
 // getCmdSuffix extracts a command suffix which modifies the behaviour
 // of the original command.
 func (ed *Editor) getCmdSuffix() error {
-	var found bool
-	for !found {
-	check:
+	var done bool
+	for !done {
 		switch ed.tok {
 		case 'p':
 			ed.cs |= cmdSuffixPrint
 			ed.token()
-			found = true
-			goto check
 		case 'l':
 			ed.cs |= cmdSuffixList
 			ed.token()
-			found = true
-			goto check
 		case 'n':
 			ed.cs |= cmdSuffixNumber
 			ed.token()
-			found = true
-			goto check
 		default:
-			found = true
+			done = true
 		}
 	}
 	if ed.tok != '\n' && ed.tok != EOF {
