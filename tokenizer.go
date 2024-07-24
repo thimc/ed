@@ -41,6 +41,9 @@ func (t *tokenizer) token() rune {
 // peek peeks at the next token rune without consuming it. On error it
 // returns EOF as a rune.
 func (t *tokenizer) peek() rune {
+	if t.tok == EOF {
+		return t.tok
+	}
 	for n := utf8.UTFMax; n > 0; n-- {
 		b, err := t.Peek(n)
 		if err != nil {

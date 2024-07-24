@@ -89,6 +89,8 @@ type Editor struct {
 	lines    []string
 	mark     [25]int // a to z
 
+	lineno int // line number in script
+
 	cs cmdSuffix // command suffix
 	ss subSuffix // substitution suffix
 
@@ -133,7 +135,7 @@ func New(opts ...OptionFunc) *Editor {
 	signal.Notify(ed.sighupch, syscall.SIGHUP, syscall.SIGQUIT)
 	go func() {
 		for range ed.sighupch {
-			if ed.modified {
+			if ed.modified && len(strings.Join(ed.lines, "")) > 0 {
 				ed.writeFile(DefaultHangupFile, 'w', 1, len(ed.lines))
 			}
 			ed.error = ErrInterrupt
@@ -196,6 +198,13 @@ func WithScripted(b bool) OptionFunc {
 	}
 }
 
+// scriptError is a wrapper for scripts when errors explainations are
+// enabled and an error occur.
+func (ed *Editor) scriptError() error {
+	fmt.Fprintln(ed.out, "?")
+	return fmt.Errorf("script, line %d: %s", ed.lineno, ed.error)
+}
+
 // Do reads expects data from the `in io.Reader` and reads until newline
 // or EOF.  After which it parses the user input for addresses (if any)
 // and finally executes the command (if any). If the prompt is enabled
@@ -207,11 +216,10 @@ func (ed *Editor) Do() error {
 	if ed.showPrompt {
 		fmt.Fprint(ed.out, ed.prompt)
 	}
-	if ed.tokenizer == nil {
+	if !ed.scripted || ed.tokenizer == nil {
 		ed.tokenizer = newTokenizer(ed.in)
 	}
-	ed.token()
-	if ed.tok == EOF {
+	if ed.token() == EOF {
 		if ed.scripted || !ed.modified {
 			return io.EOF
 		}
@@ -222,11 +230,17 @@ func (ed *Editor) Do() error {
 		if !ed.printErrors {
 			return ErrDefault
 		}
+		if ed.scripted {
+			return ed.scriptError()
+		}
 		return ed.error
 	}
 	if ed.error = ed.do(); ed.error != nil {
 		if !ed.printErrors {
 			return ErrDefault
+		}
+		if ed.scripted {
+			return ed.scriptError()
 		}
 		return ed.error
 	}
@@ -238,6 +252,7 @@ func (ed *Editor) Do() error {
 		}
 	}
 	if ed.scripted && ed.tok == '\n' && ed.peek() != EOF {
+		ed.lineno++
 		return ed.Do()
 	}
 	return ed.error

@@ -963,6 +963,5 @@ func (ed *Editor) do() (err error) {
 		}
 		return ed.displayLines(ed.end, ed.end, 0)
 	}
-	ed.token()
 	return ErrUnknownCmd
 }
