@@ -750,7 +750,7 @@ func (ed *Editor) do() (err error) {
 				ed.ss |= subLastRegex
 				ed.token()
 			case unicode.IsDigit(ed.tok):
-				nth, err = strconv.Atoi(string(ed.tok))
+				nth, err = ed.scanNumber()
 				if err != nil {
 					return ErrNumberOutOfRange
 				}

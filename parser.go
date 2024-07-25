@@ -64,12 +64,7 @@ func (ed *Editor) nextAddress() (int, error) {
 			var n int
 			ed.skipWhitespace()
 			if unicode.IsDigit(ed.tok) {
-				var s string
-				for unicode.IsDigit(ed.tok) {
-					s += string(ed.tok)
-					ed.token()
-				}
-				n, err = strconv.Atoi(s)
+				n, err = ed.scanNumber()
 				if err != nil {
 					return -1, err
 				}
@@ -202,6 +197,17 @@ func (ed *Editor) check(n, m int) error {
 		return ErrInvalidAddress
 	}
 	return nil
+}
+
+// scanNumber scans the user input for a number and will advance until
+// the current token is not a valid digit.
+func (ed *Editor) scanNumber() (int, error) {
+	var s string
+	for unicode.IsDigit(ed.tok) {
+		s += string(ed.tok)
+		ed.token()
+	}
+	return strconv.Atoi(s)
 }
 
 // scanString scans the user input until EOF or new line.
