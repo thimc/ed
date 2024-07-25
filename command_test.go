@@ -428,26 +428,30 @@ func TestCmdGlobal(t *testing.T) {
 
 func TestCmdHelp(t *testing.T) {
 	var (
-		ted    = New(WithStdin(strings.NewReader("2h\n")), WithStdout(io.Discard), WithStderr(io.Discard))
-		expect = ErrNoFileName
+		b   bytes.Buffer
+		ted = New(WithStdout(&b), WithStderr(io.Discard))
 	)
 	ted.printErrors = true
 	setupMemoryFile(ted, dummyFile)
-	expect = ErrUnexpectedAddress
-	if err := ted.Do(); err != expect {
-		t.Fatalf("expected error %q, got %q", expect, err)
+	tests := []struct {
+		cmd    string
+		output string
+		err    error
+	}{
+		{cmd: "2h\n", err: ErrUnexpectedAddress},
+		{cmd: "h=\n", err: ErrInvalidCmdSuffix},
+		{cmd: "h\n", err: ErrInvalidCmdSuffix},
 	}
-	setupMemoryFile(ted, dummyFile)
-	ted.in = strings.NewReader("2h\n")
-	ted.tokenizer = nil
-	if err := ted.Do(); err != expect {
-		t.Fatalf("expected error %q, got %q", expect, err)
-	}
-	ted.in = strings.NewReader("h\n")
-	ted.tokenizer = nil
-	expect = ErrUnexpectedAddress
-	if err := ted.Do(); err != expect {
-		t.Fatalf("expected error %q, got %q", expect, err)
+	for _, tt := range tests {
+		t.Run(tt.cmd, func(t *testing.T) {
+			ted.in = strings.NewReader(tt.cmd)
+			if err := ted.Do(); err != tt.err {
+				t.Fatalf("expected error %q, got %q", tt.err, err)
+			}
+			if b.String() != tt.output {
+				t.Fatalf("expected output %q, got %q", tt.output, b.String())
+			}
+		})
 	}
 }
 
