@@ -32,8 +32,8 @@ import (
 var (
 	// prompt sets the user prompt and implicitly enables the prompt option.
 	prompt = flag.String("p", "", "user prompt")
-	// scripted surpresses diagnostics and should be if ed is used in scripts.
-	scripted = flag.Bool("s", false, "suppress diagnostics")
+	// silent surpresses diagnostics and should be if ed is used in scripts.
+	silent = flag.Bool("s", false, "suppress diagnostics")
 )
 
 func main() {
@@ -45,11 +45,11 @@ func main() {
 	)
 	for n, arg := range os.Args {
 		if arg == "-" {
-			*scripted = true
+			*silent = true
 			args = append(args[:n-1], args[n:]...)
 		}
 	}
-	var options = []OptionFunc{WithPrompt(*prompt), WithScripted(*scripted)}
+	var options = []OptionFunc{WithPrompt(*prompt), WithSilent(*silent), WithScripted(!terminal)}
 	if len(args) == 1 {
 		// TODO(thimc): Support "binary mode" which replaces all
 		// instances of the NULL or nil token with a newline.

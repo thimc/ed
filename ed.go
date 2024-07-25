@@ -87,8 +87,8 @@ type Editor struct {
 
 	path     string // full path to file
 	modified bool
-	silent   bool
-	scripted bool
+	silent   bool // suppress diagnostics
+	scripted bool // terminal check
 	lines    []string
 	mark     [25]int // a to z
 
@@ -197,19 +197,35 @@ func WithFile(path string) OptionFunc {
 	}
 }
 
-// WithScripted overrides the default silent mode of the editor. This mode
+// WithSilent overrides the default silent mode of the editor. This mode
 // is meant to be used with ed scripts.
-func WithScripted(b bool) OptionFunc {
+func WithSilent(b bool) OptionFunc {
 	return func(ed *Editor) {
-		ed.scripted = b
+		ed.silent = b
 	}
 }
 
-// scriptError is a wrapper for scripts when errors explainations are
-// enabled and an error occur.
-func (ed *Editor) scriptError() error {
-	fmt.Fprintln(ed.out, "?")
-	return fmt.Errorf("script, line %d: %s", ed.lineno, ed.error)
+// WithScripted determines if ed should treat the [ed.in] reader as if
+// the data is being piped from a file. If [t] is set to true, ed will
+// try to parse as many lines of commands as possible. If any errors
+// are encountered they are wrapped into errors that help the user
+// debug script errors.
+func WithScripted(t bool) OptionFunc {
+	return func(ed *Editor) {
+		ed.scripted = t
+	}
+}
+
+func (ed *Editor) wrapError(err error) error {
+	ed.error = err
+	if !ed.printErrors {
+		return ErrDefault
+	}
+	if ed.scripted {
+		fmt.Fprintln(ed.out, "?")
+		return fmt.Errorf("script, line %d: %s", ed.lineno, ed.error)
+	}
+	return ed.error
 }
 
 // Do reads expects data from the `in io.Reader` and reads until newline
@@ -233,23 +249,10 @@ func (ed *Editor) Do() error {
 		ed.tok = 'q'
 	}
 	if err := ed.parse(); err != nil {
-		ed.error = err
-		if !ed.printErrors {
-			return ErrDefault
-		}
-		if ed.scripted {
-			return ed.scriptError()
-		}
-		return ed.error
+		return ed.wrapError(err)
 	}
 	if ed.error = ed.do(); ed.error != nil {
-		if !ed.printErrors {
-			return ErrDefault
-		}
-		if ed.scripted {
-			return ed.scriptError()
-		}
-		return ed.error
+		return ed.wrapError(ed.error)
 	}
 	if ed.cs > 0 {
 		if ed.error = ed.displayLines(ed.dot, ed.dot, ed.cs); ed.error != nil {
