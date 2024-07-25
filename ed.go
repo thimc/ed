@@ -240,7 +240,7 @@ func (ed *Editor) Do() error {
 		ed.tokenizer = newTokenizer(ed.in)
 	}
 	if ed.token() == EOF {
-		if ed.scripted || !ed.modified {
+		if !ed.modified {
 			return io.EOF
 		}
 		ed.tok = 'q'

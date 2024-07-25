@@ -189,17 +189,14 @@ func (ed *Editor) global(r rune) error {
 		ed.undohist = append(ed.undohist, ed.globalUndo)
 		ed.globalCmd = cmdlist
 	}()
-	for n, i := range ed.list {
+	if interact && ed.tok == '\n' {
+		ed.token()
+	}
+	var size int = len(ed.lines)
+	for _, i := range ed.list {
 		t = *ed.tokenizer
-		ed.dot = i
-		if ed.dot >= len(ed.lines) {
-			i = len(ed.lines)
-			ed.dot = i
-		}
+		ed.dot = i - (size - len(ed.lines))
 		if interact {
-			if n == 0 && ed.tok == '\n' {
-				ed.token()
-			}
 			if err := ed.displayLines(ed.dot, ed.dot, ed.cs); err != nil {
 				return err
 			}
