@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 )
@@ -68,6 +69,7 @@ var (
 	ErrNoPreviousSub       = errors.New("no previous substitution")
 	ErrNothingToUndo       = errors.New("nothing to undo")
 	ErrUnexpectedAddress   = errors.New("unexpected address")
+	ErrUnexpectedEOF       = errors.New("unexpected end-of-file")
 	ErrUnexpectedCmdSuffix = errors.New("unexpected command suffix")
 	ErrUnknownCmd          = errors.New("unknown command")
 	ErrZero                = errors.New("0")
@@ -80,11 +82,12 @@ type position struct {
 
 // Editor contains the internal data structures needed for ed.
 type Editor struct {
-	position
+	position   // cursors
 	*tokenizer // user input
 
 	path     string // full path to file
 	modified bool
+	silent   bool
 	scripted bool
 	lines    []string
 	mark     [25]int // a to z
@@ -94,25 +97,29 @@ type Editor struct {
 	cs cmdSuffix // command suffix
 	ss subSuffix // substitution suffix
 
-	undohist    [][]undoAction // undo history
-	globalUndo  []undoAction   // undo actions caught during global mode
-	g           bool           // global command state
-	error       error          // previous error
-	scroll      int            // previous scroll value
-	search      string         // previous search criteria for /, ? or s
-	replacestr  string         // previous s replacement
-	showPrompt  bool           // toggle for displaying the prompt
-	prompt      string         // user prompt
-	shellCmd    string         // previous command for !
-	globalCmd   string         // previous command used by g, G, v and V
-	printErrors bool           // toggle errors
+	undohist [][]undoAction // undo history
+
+	globalUndo []undoAction // undo actions caught during global mode
+	g          bool         // global command state
+	list       []int        // indices of marked lines
+
+	error      error          // previous error
+	globalCmd  string         // previous command used by g, G, v and V
+	re         *regexp.Regexp // previous regex for /, ? and s
+	replacestr string         // previous s replacement
+	scroll     int            // previous scroll value
+	shellCmd   string         // previous command for !
+
+	showPrompt  bool   // toggle for displaying the prompt
+	prompt      string // user prompt
+	printErrors bool   // toggle errors
 
 	sighupch chan os.Signal
 	sigintch chan os.Signal
 
-	in  io.Reader // standard input
-	out io.Writer // standard output
-	err io.Writer // standard error
+	in  io.Reader // input
+	out io.Writer // output
+	err io.Writer // error
 }
 
 // New creates a new Editor. If no options are passed the editor

@@ -427,12 +427,8 @@ func (ed *Editor) writeFile(path string, mod rune, start, end int) error {
 	return err
 }
 
-func (ed *Editor) substitute(search, replace string, nth int, action *[]undoAction) error {
+func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int, action *[]undoAction) error {
 	var subs int
-	re, err := regexp.Compile(search)
-	if err != nil {
-		return err
-	}
 	for i := 0; i <= ed.end-ed.start; i++ {
 		if !re.MatchString(ed.lines[i]) {
 			continue
@@ -493,7 +489,7 @@ func (ed *Editor) substitute(search, replace string, nth int, action *[]undoActi
 		ed.dot = i + 1
 		subs++
 	}
-	ed.search = search
+	ed.re = re
 	ed.replacestr = replace
 	if subs == 0 && !ed.g {
 		return ErrNoMatch
@@ -769,7 +765,7 @@ func (ed *Editor) do() (err error) {
 				break
 			}
 		}
-		if ed.ss > 0 && ed.search == "" {
+		if ed.ss > 0 && ed.re == nil {
 			return ErrNoPrevPattern
 		} else if ed.ss&subGlobal > 0 {
 			nth = -1
@@ -783,19 +779,24 @@ func (ed *Editor) do() (err error) {
 			search  = ed.scanStringUntil(delim)
 			replace = ed.scanStringUntil(delim)
 			suffix  = ed.scanString()
+			re      *regexp.Regexp
 		)
+		re, err = regexp.Compile(search)
+		if err != nil {
+			return err
+		}
 		if ed.ss&subRepeat > 0 {
-			search = ed.search
+			re = ed.re
 			replace = ed.replacestr
 		}
 		if ed.ss&subPrint > 0 {
 			ed.cs |= cmdSuffixPrint
 		}
 		if search == "" {
-			if ed.search == "" {
+			if ed.re == nil {
 				return ErrNoPrevPattern
 			}
-			search = ed.search
+			re = ed.re
 		}
 		if replace == "%" {
 			if ed.replacestr == "" {
@@ -827,7 +828,7 @@ func (ed *Editor) do() (err error) {
 		if err := ed.check(ed.dot, ed.dot); err != nil {
 			return err
 		}
-		return ed.substitute(search, replace, nth, &action)
+		return ed.substitute(re, replace, nth, &action)
 	case 't':
 		ed.token()
 		if err := ed.check(ed.dot, ed.dot); err != nil {

@@ -103,13 +103,17 @@ func (ed *Editor) nextAddress() (int, error) {
 			if ed.tok == mod {
 				ed.token()
 			}
+			re, err := regexp.Compile(search)
+			if err != nil {
+				return -1, err
+			}
 			if search == "" {
-				search = ed.search
-				if ed.search == "" {
+				if ed.re == nil {
 					return -1, ErrNoPrevPattern
 				}
+				re = ed.re
 			}
-			ed.search = search
+			ed.re = re
 			var (
 				found bool
 				i     = ed.dot
@@ -130,11 +134,7 @@ func (ed *Editor) nextAddress() (int, error) {
 					}
 				}
 				i %= len(ed.lines)
-				match, err := regexp.MatchString(search, ed.lines[i])
-				if err != nil {
-					return -1, ErrNoMatch
-				}
-				if match {
+				if re.MatchString(ed.lines[i]) {
 					addr = i + 1
 					found = true
 					break
