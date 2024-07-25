@@ -102,45 +102,85 @@ func (ed *Editor) undo() (err error) {
 	return nil
 }
 
-// global executes a command sequence globally. The start and end
-// positions are set to the dot.
-func (ed *Editor) global(r rune) error {
+// buildList builds a list of line indices for the lines that are marked
+// by the the global command and the regular expression.
+func (ed *Editor) buildList(r rune) error {
 	var (
-		interactive = (r == 'G' || r == 'V')
-		invert      = (r == 'v' || r == 'V')
-		search      string
-		cmdlist     string
-		delim       rune
-		marked      []int
-		t           tokenizer
+		delim  = ed.tok
+		search string
+		g      = (r == 'g' || r == 'G')
 	)
-	// if interactive {
-	// 	if err := ed.getCmdSuffix(); err != nil {
-	// 		return err
-	// 	}
-	// }
-	delim = ed.tok
 	if delim == ' ' || delim == '\n' || delim == EOF {
 		return ErrInvalidPatternDelim
 	}
 	ed.token()
 	search = ed.scanStringUntil(delim)
-	if !interactive {
-		if ed.tok != EOF && ed.tok != '\n' {
-			cmdlist = ed.scanString()
-		}
-		cmdlist = strings.TrimSuffix(cmdlist, string(delim))
-		if !interactive && (cmdlist == "" || cmdlist == "\n") {
-			cmdlist = "p"
-		}
-	}
 	re, err := regexp.Compile(search)
 	if err != nil {
 		return err
 	}
-	for i, ln := range ed.lines {
-		if re.MatchString(ln) != invert {
-			marked = append(marked, i+1)
+	if search == "" {
+		if ed.re == nil {
+			return ErrNoPrevPattern
+		}
+		re = ed.re
+	}
+	if r == 'G' || r == 'V' {
+		if err := ed.getCmdSuffix(); err != nil {
+			return err
+		}
+	}
+	ed.list = []int{}
+	for i := ed.start - 1; i < ed.end; i++ {
+		if re.MatchString(ed.lines[i]) == g {
+			ed.list = append(ed.list, i+1)
+		}
+	}
+	return nil
+}
+
+func (ed *Editor) getCmdList() (string, error) {
+	var (
+		s, ln string
+		done  bool
+	)
+	const sep = "\\"
+	for {
+		done = true
+		ln = ed.scanString()
+		if strings.HasSuffix(ln, sep) {
+			ln = strings.TrimSuffix(ln, sep)
+			done = false
+		}
+		s += ln
+		if !done {
+			if ed.tok == EOF {
+				return "", ErrUnexpectedEOF
+			}
+			continue
+		}
+		break
+	}
+	return s, nil
+}
+
+// global executes a command sequence globally. The start and end
+// positions are set to the dot.
+func (ed *Editor) global(r rune) error {
+	var (
+		interact = (r == 'G' || r == 'V')
+		cmdlist  string
+		err      error
+		t        tokenizer
+		ln       string
+	)
+	if !interact {
+		cmdlist, err = ed.getCmdList()
+		if err != nil {
+			return err
+		}
+		if cmdlist == "" || cmdlist == "\n" {
+			cmdlist = "p"
 		}
 	}
 	defer func() {
@@ -149,19 +189,24 @@ func (ed *Editor) global(r rune) error {
 		ed.undohist = append(ed.undohist, ed.globalUndo)
 		ed.globalCmd = cmdlist
 	}()
-	ed.g = true
-	for _, i := range marked {
-		if ed.tok == '\n' {
-			ed.token()
-		}
+	for n, i := range ed.list {
 		t = *ed.tokenizer
 		ed.dot = i
 		if ed.dot >= len(ed.lines) {
 			i = len(ed.lines)
 			ed.dot = i
 		}
-		if interactive {
-			ln := ed.scanStringUntil('\n')
+		if interact {
+			if n == 0 && ed.tok == '\n' {
+				ed.token()
+			}
+			if err := ed.displayLines(ed.dot, ed.dot, ed.cs); err != nil {
+				return err
+			}
+			ln, err = ed.getCmdList()
+			if err != nil {
+				return err
+			}
 			if ln == "" {
 				continue
 			} else if ln == "&" || ln == "&\n" {
@@ -188,6 +233,7 @@ func (ed *Editor) global(r rune) error {
 		}
 		ed.tokenizer = &t
 	}
+	ed.cs = 0
 	return nil
 }
 
@@ -387,7 +433,7 @@ func (ed *Editor) readFile(path string) error {
 		ed.lines = lines
 		ed.path = path
 	}
-	if !ed.scripted {
+	if !ed.silent {
 		fmt.Fprintln(ed.err, siz)
 	}
 	ed.dot = len(ed.lines)
@@ -421,7 +467,7 @@ func (ed *Editor) writeFile(path string, mod rune, start, end int) error {
 		siz += len(line)
 	}
 	ed.modified = false
-	if !ed.scripted {
+	if !ed.silent {
 		fmt.Fprintln(ed.err, siz)
 	}
 	return err
@@ -604,7 +650,10 @@ func (ed *Editor) do() (err error) {
 			return ErrCannotNestGlobal
 		} else if err := ed.check(1, len(ed.lines)); err != nil {
 			return err
+		} else if err := ed.buildList(mod); err != nil {
+			return err
 		}
+		ed.g = true
 		return ed.global(mod)
 	case 'h', 'H':
 		var mod = ed.tok
@@ -618,7 +667,10 @@ func (ed *Editor) do() (err error) {
 		if mod == 'H' {
 			ed.printErrors = !ed.printErrors
 		}
-		return ed.error
+		if ed.error != nil {
+			fmt.Fprintln(ed.err, ed.error)
+		}
+		return nil
 	case 'i':
 		ed.token()
 		if ed.end == 0 {

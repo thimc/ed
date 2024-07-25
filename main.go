@@ -52,12 +52,12 @@ func main() {
 	var options = []OptionFunc{WithPrompt(*prompt), WithSilent(*silent), WithScripted(!terminal)}
 	if len(args) == 1 {
 		// TODO(thimc): Support "binary mode" which replaces all
-		// instances of the NULL or nil token with a newline.
+		// instances of the null character with a newline.
 		options = append(options, WithFile(args[0]))
 	}
 	for ed := New(options...); ; {
 		if err := ed.Do(); err != nil {
-			if errors.Is(err, io.EOF) && !terminal {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			fmt.Fprintln(os.Stderr, err)

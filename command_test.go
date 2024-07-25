@@ -305,7 +305,7 @@ func TestCmdFile(t *testing.T) {
 
 func TestCmdGlobal(t *testing.T) {
 	var (
-		buffer = dummyFile[:3]
+		buffer = dummyFile[:5]
 		last   = len(buffer)
 	)
 	tests := []struct {
@@ -317,84 +317,77 @@ func TestCmdGlobal(t *testing.T) {
 		err            error
 	}{
 		{
-			cmd:            "g/nonexisting/d",
-			init:           position{start: last, end: last, dot: last},
+			cmd:            "g/B/dn",
+			expect:         position{start: 2, end: 2, dot: 2, addrc: 0},
+			expectedBuffer: []string{"A", "C", "D", "E"},
+			expectedOutput: "2\tC\n",
+		},
+		{
+			cmd:            "g/Z/\n",
 			expect:         position{start: 1, end: last, dot: last, addrc: 0},
 			expectedBuffer: buffer,
 		},
 		{
-			cmd:            "g/.*/",
-			init:           position{start: last, end: last, dot: last},
-			expect:         position{start: last, end: last, dot: last},
-			expectedBuffer: buffer,
-			expectedOutput: "A\nB\nC\n",
+			cmd:            "g/B/d\n",
+			expect:         position{start: 2, end: 2, dot: 2, addrc: 0},
+			expectedBuffer: []string{"A", "C", "D", "E"},
 		},
 		{
-			cmd:            "g/F/s/F/test/",
-			init:           position{start: last, end: last, dot: last},
-			expect:         position{start: 1, end: last, dot: last},
-			expectedBuffer: buffer,
-		},
-		{
-			cmd:            "g	A	d\n",
-			expect:         position{start: 1, end: 1, dot: 1, addrc: 0},
-			expectedBuffer: buffer[1:],
-		},
-		{
-			cmd:            "v/A/d\n",
+			cmd:            "v/B/d\n",
 			expect:         position{start: 2, end: 2, dot: 1, addrc: 0},
-			expectedBuffer: buffer[:1],
+			expectedBuffer: []string{"B"},
 		},
 		{
-			cmd:            "G/B/\n",
-			expect:         position{start: 1, end: last, dot: 2, addrc: 0},
+			cmd:            "G/B\n\n",
+			expect:         position{start: 1, end: 5, dot: 2, addrc: 0},
 			expectedBuffer: buffer,
+			expectedOutput: "B\n",
 		},
 		{
-			cmd:            "V/B/\n",
-			expect:         position{start: 1, end: last, dot: last, addrc: 0},
+			cmd:            "g/A/\\",
+			expect:         position{start: 1, end: 5, dot: 5, addrc: 0},
 			expectedBuffer: buffer,
+			err:            ErrUnexpectedEOF,
 		},
 		{
-			cmd:            "V/B/\np\nn\n",
-			expect:         position{start: last, end: last, dot: last, addrc: 0},
+			cmd:            "g/A/pZ\n",
+			expect:         position{start: 1, end: 1, dot: 1, addrc: 0},
 			expectedBuffer: buffer,
-			expectedOutput: "A\n3\tC\n",
+			err:            ErrInvalidCmdSuffix,
 		},
 		{
-			cmd:            "v\n",
-			init:           position{start: last, end: last, dot: last},
-			expect:         position{start: 1, end: last, dot: last},
+			cmd:            "g/A/Z\n",
+			expect:         position{start: 1, end: 1, dot: 1, addrc: 0},
 			expectedBuffer: buffer,
-			err:            ErrInvalidPatternDelim,
+			err:            ErrUnknownCmd,
 		},
 		{
-			cmd:            "g a d \n",
-			init:           position{start: last, end: last, dot: last},
-			expect:         position{start: 1, end: last, dot: last},
-			expectedBuffer: buffer,
-			err:            ErrInvalidPatternDelim,
-		},
-		{
-			cmd:            ",g\n",
-			init:           position{start: last, end: last, dot: last},
-			expect:         position{start: 1, end: last, dot: last, addrc: 2},
+			cmd:            "g\n",
+			expect:         position{start: 1, end: 5, dot: 5, addrc: 0},
 			expectedBuffer: buffer,
 			err:            ErrInvalidPatternDelim,
 		},
 		{
-			cmd:            "G|B|\n&\n",
-			expect:         position{start: 1, end: last, dot: 2},
+			cmd:            "g/\n",
+			expect:         position{start: 1, end: 5, dot: 5, addrc: 0},
 			expectedBuffer: buffer,
-			err:            ErrNoPreviousCmd,
+			err:            ErrNoPrevPattern,
 		},
 		{
-			cmd:            "g/C/g\n",
-			expect:         position{start: last, end: last, dot: last},
+			cmd:            "g/A/g\n",
+			expect:         position{start: 1, end: 1, dot: 1, addrc: 0},
 			expectedBuffer: buffer,
 			err:            ErrCannotNestGlobal,
 		},
+		{
+			cmd:            "G/B/\n&\n",
+			expect:         position{start: 1, end: 5, dot: 2, addrc: 0},
+			expectedBuffer: buffer,
+			expectedOutput: "B\n",
+			err:            ErrNoPreviousCmd,
+		},
 	}
+	_ = last // XXX
 	for _, tt := range tests {
 		t.Run(string(tt.cmd), func(t *testing.T) {
 			var (
@@ -429,7 +422,7 @@ func TestCmdGlobal(t *testing.T) {
 func TestCmdHelp(t *testing.T) {
 	var (
 		b   bytes.Buffer
-		ted = New(WithStdout(&b), WithStderr(io.Discard))
+		ted = New(WithStdout(&b), WithStderr(&b))
 	)
 	ted.printErrors = true
 	setupMemoryFile(ted, dummyFile)
@@ -439,8 +432,8 @@ func TestCmdHelp(t *testing.T) {
 		err    error
 	}{
 		{cmd: "2h\n", err: ErrUnexpectedAddress},
-		{cmd: "h=\n", err: ErrInvalidCmdSuffix},
-		{cmd: "h\n", err: ErrInvalidCmdSuffix},
+		{cmd: "h}\n", err: ErrInvalidCmdSuffix},
+		{cmd: "h\n", output: ErrInvalidCmdSuffix.Error() + "\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.cmd, func(t *testing.T) {
@@ -455,28 +448,33 @@ func TestCmdHelp(t *testing.T) {
 	}
 }
 
-func TestCmdHelpToggle(t *testing.T) {
+func TestCmdToggleHelp(t *testing.T) {
 	var (
-		ted = New(WithStdout(io.Discard), WithStderr(io.Discard))
+		b   bytes.Buffer
+		ted = New(WithStdout(&b), WithStderr(&b))
 	)
 	tests := []struct {
-		cmd string
-		err error
+		cmd    string
+		output string
+		err    error
 	}{
 		{cmd: "2H\n", err: ErrDefault},
-		{cmd: "H\n", err: ErrUnexpectedAddress},
+		{cmd: "H\n", output: ErrUnexpectedAddress.Error() + "\n"},
 		{cmd: "3H\n", err: ErrUnexpectedAddress},
 		{cmd: "H=\n", err: ErrInvalidCmdSuffix},
-		{cmd: "H\n", err: ErrDefault},
 	}
 	setupMemoryFile(ted, dummyFile)
 	ted.printErrors = false
 	for _, tt := range tests {
 		t.Run(tt.cmd, func(t *testing.T) {
+			b.Reset()
 			ted.in = strings.NewReader(tt.cmd)
 			ted.tokenizer = nil
 			if err := ted.Do(); err != tt.err {
 				t.Fatalf("expected error %q, got %q", tt.err, err)
+			}
+			if b.String() != tt.output {
+				t.Fatalf("expected output %q, got %q", tt.output, b.String())
 			}
 		})
 	}
@@ -682,20 +680,51 @@ func TestCmdMove(t *testing.T) {
 	)
 	tests := []struct {
 		cmd            string
-		buffer         []string
 		init           position
+		buffer         []string
 		expect         position
 		expectedBuffer string
 		err            error
 	}{
 		{
 			cmd:            "1,5m9\n",
-			buffer:         dummyFile,
 			init:           position{start: len(dummyFile), end: len(dummyFile), dot: len(dummyFile)},
+			buffer:         dummyFile,
 			expect:         position{start: 1, end: 5, dot: 9, addrc: 1},
 			expectedBuffer: "F\nG\nH\nI\nA\nB\nC\nD\nE\nJ\nK\nL\nM\nN\nO\nP\nQ\nR\nS\nT\nU\nV\nW\nX\nY\nZ",
 		},
-		{cmd: "m\n", buffer: []string{""}, expectedBuffer: "", err: ErrInvalidAddress},
+		{
+			cmd:            "1,5mz\n",
+			buffer:         dummyFile,
+			expectedBuffer: strings.Join(dummyFile, "\n"),
+			err:            ErrDestinationExpected,
+		},
+		{
+			cmd:            "m1\n",
+			buffer:         dummyFile,
+			expectedBuffer: strings.Join(dummyFile, "\n"),
+			err:            ErrInvalidAddress,
+		},
+		{
+			cmd:            "1,2m1\n",
+			buffer:         dummyFile,
+			expect:         position{start: 1, end: 2, dot: 0, addrc: 1},
+			expectedBuffer: strings.Join(dummyFile, "\n"),
+			err:            ErrInvalidDestination,
+		},
+		{
+			cmd:            "1m1a\n",
+			buffer:         dummyFile,
+			expect:         position{start: 1, end: 1, dot: 0, addrc: 1},
+			expectedBuffer: strings.Join(dummyFile, "\n"),
+			err:            ErrInvalidCmdSuffix,
+		},
+		{
+			cmd:            "m\n",
+			buffer:         []string{""},
+			expectedBuffer: "",
+			err:            ErrInvalidAddress,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.cmd, func(t *testing.T) {
@@ -729,36 +758,35 @@ func TestCmdPrompt(t *testing.T) {
 		b   bytes.Buffer
 		ted = New(WithStdout(&b), WithStderr(io.Discard))
 	)
-	setupMemoryFile(ted, dummyFile)
-	ted.in = strings.NewReader("P#\n")
-	ted.tokenizer = nil
-	if err := ted.Do(); err != ErrInvalidCmdSuffix {
-		t.Fatalf("expected error %q, got %q", ErrInvalidCmdSuffix, err)
+	tests := []struct {
+		cmd    string
+		err    error
+		output string
+		expect bool
+	}{
+		{cmd: "1,2P\n", err: ErrUnexpectedAddress},
+		{cmd: "P\n", expect: true},
+		{cmd: "P\n", output: DefaultPrompt, expect: false},
+		{cmd: "P#\n", err: ErrInvalidCmdSuffix},
+		{cmd: "Pp\n", output: dummyFile[len(dummyFile)-1] + "\n", expect: true},
+		{cmd: "P\n", output: DefaultPrompt, expect: false},
 	}
-	if ted.showPrompt == true {
-		t.Fatalf("expected show prompt to be %t, got %t", true, ted.showPrompt)
-	}
-	ted.in = strings.NewReader("Pp\n")
-	ted.tokenizer = nil
-	if err := ted.Do(); err != nil {
-		t.Fatalf("expected no error, got %q", err)
-	}
-	expect := dummyFile[len(dummyFile)-1] + "\n"
-	if b.String() != expect {
-		t.Fatalf("expected output %q, got %q", expect, b.String())
-	}
-	if ted.showPrompt == false {
-		t.Fatalf("expected show prompt to be %t, got %t", false, ted.showPrompt)
-	}
-	b.Reset()
-	ted.in = strings.NewReader("1\n")
-	ted.tokenizer = nil
-	if err := ted.Do(); err != nil {
-		t.Fatalf("expected error %v, got %q", nil, err)
-	}
-	expect = DefaultPrompt
-	if !strings.HasPrefix(b.String(), expect) {
-		t.Fatalf("expected the output to have the prompt %q, got %q", ted.prompt, b.String())
+	for _, tt := range tests {
+		t.Run(tt.cmd, func(t *testing.T) {
+			b.Reset()
+			setupMemoryFile(ted, dummyFile)
+			ted.in = strings.NewReader(tt.cmd)
+			ted.tokenizer = nil
+			if err := ted.Do(); err != tt.err {
+				t.Fatalf("expected error %q, got %q", tt.err, err)
+			}
+			if ted.showPrompt != tt.expect {
+				t.Fatalf("expected show prompt to be %t, got %t", tt.expect, ted.showPrompt)
+			}
+			if b.String() != tt.output {
+				t.Fatalf("expected output %q, got %q", tt.output, b.String())
+			}
+		})
 	}
 }
 

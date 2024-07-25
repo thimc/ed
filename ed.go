@@ -222,7 +222,6 @@ func (ed *Editor) wrapError(err error) error {
 		return ErrDefault
 	}
 	if ed.scripted {
-		fmt.Fprintln(ed.out, "?")
 		return fmt.Errorf("script, line %d: %s", ed.lineno, ed.error)
 	}
 	return ed.error
@@ -231,11 +230,9 @@ func (ed *Editor) wrapError(err error) error {
 // Do reads expects data from the `in io.Reader` and reads until newline
 // or EOF.  After which it parses the user input for addresses (if any)
 // and finally executes the command (if any). If the prompt is enabled
-// it is printed to the `err io.Writer` before any data is read. If the
-// internal state of the editor is to not explain errors then if any
-// errors are encountered they are automatically defaulted to [ErrDefault].
-// Do returns the error io.EOF if the in reader is empty.
+// it is printed to [ed.out] before prompting the user.
 func (ed *Editor) Do() error {
+	var err error
 	if ed.showPrompt {
 		fmt.Fprint(ed.out, ed.prompt)
 	}
@@ -248,24 +245,23 @@ func (ed *Editor) Do() error {
 		}
 		ed.tok = 'q'
 	}
-	if err := ed.parse(); err != nil {
+	if err = ed.parse(); err != nil {
 		return ed.wrapError(err)
 	}
-	if ed.error = ed.do(); ed.error != nil {
-		return ed.wrapError(ed.error)
+	if err = ed.do(); err != nil {
+		return ed.wrapError(err)
 	}
 	if ed.cs > 0 {
-		if ed.error = ed.displayLines(ed.dot, ed.dot, ed.cs); ed.error != nil {
-			if !ed.printErrors {
-				return ErrDefault
-			}
+		if err = ed.displayLines(ed.dot, ed.dot, ed.cs); err != nil {
+			return ed.wrapError(err)
 		}
 	}
+	ed.error = err
 	if ed.scripted {
 		ed.lineno++
 		return ed.Do()
 	}
-	return ed.error
+	return nil
 }
 
 // shell runs the [command] in a subshell ([DefaultShell]) and returns

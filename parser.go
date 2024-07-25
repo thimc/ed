@@ -146,7 +146,6 @@ func (ed *Editor) nextAddress() (int, error) {
 				return -1, ErrInvalidAddress
 			}
 			var r = ed.token()
-			ed.token()
 			if r == EOF || !unicode.IsLower(r) {
 				return -1, ErrInvalidMark
 			}
@@ -159,6 +158,7 @@ func (ed *Editor) nextAddress() (int, error) {
 				return -1, ErrInvalidAddress
 			}
 			addr = maddr
+			ed.token()
 		case ed.tok == '%' || ed.tok == ',' || ed.tok == ';':
 			if first {
 				ed.addrc++
