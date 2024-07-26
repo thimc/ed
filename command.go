@@ -790,6 +790,7 @@ func (ed *Editor) do() (err error) {
 			switch {
 			case ed.tok == '\n':
 				ed.ss |= subRepeat
+				ed.token()
 			case ed.tok == 'g':
 				ed.ss |= subGlobal
 				ed.token()
@@ -797,11 +798,9 @@ func (ed *Editor) do() (err error) {
 				ed.ss |= subPrint
 				ed.token()
 			case ed.tok == 'r':
-				// TODO(thimc): substitute: Implement 'r'
 				ed.ss |= subLastRegex
 				ed.token()
 			case unicode.IsDigit(ed.tok):
-				// TODO(thimc):  ubstitute: Implement '0'..'9'
 				nth, err = ed.scanNumber()
 				if err != nil {
 					return ErrNumberOutOfRange
@@ -813,7 +812,7 @@ func (ed *Editor) do() (err error) {
 					return ErrInvalidCmdSuffix
 				}
 			}
-			if ed.ss < 1 || ed.tok == '\n' || ed.tok == EOF {
+			if ed.ss < 1 || ed.tok == EOF {
 				break
 			}
 		}
