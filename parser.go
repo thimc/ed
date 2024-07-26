@@ -95,9 +95,6 @@ func (ed *Editor) nextAddress() (int, error) {
 			var mod = ed.tok
 			ed.token()
 			var search = ed.scanStringUntil(mod)
-			if ed.tok == mod {
-				ed.token()
-			}
 			re, err := regexp.Compile(search)
 			if err != nil {
 				return -1, err
@@ -150,7 +147,7 @@ func (ed *Editor) nextAddress() (int, error) {
 				return -1, ErrInvalidMark
 			}
 			var mark = int(r) - 'a'
-			if mark < 0 || mark > len(ed.mark) {
+			if mark < 0 || mark >= len(ed.mark) {
 				return -1, ErrInvalidMark
 			}
 			var maddr = ed.mark[mark]

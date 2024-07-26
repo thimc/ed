@@ -31,14 +31,15 @@ func setupMemoryFile(ed *Editor, buf []string) {
 }
 
 // createDummyFile creates a dummy file `fname` containing `dummyFile`.
-func createDummyFile(fname string) error {
+func createDummyFile(fname string, t *testing.T) {
 	file, err := os.Create(fname)
 	if err != nil {
-		return err
+		t.Fatalf("create dummy file: %q", err)
 	}
 	defer file.Close()
-	_, err = file.WriteString(strings.Join(dummyFile, "\n"))
-	return err
+	if _, err = file.WriteString(strings.Join(dummyFile, "\n")); err != nil {
+		t.Fatalf("write dummy file: %q", err)
+	}
 }
 
 func TestParser(t *testing.T) {
@@ -47,8 +48,14 @@ func TestParser(t *testing.T) {
 		cmd    string
 		init   position
 		expect position
+		empty  bool
 		err    error
 	}{
+		{
+			cmd:    "",
+			init:   position{start: 1, end: 1, dot: last},
+			expect: position{start: last, end: last, dot: last},
+		},
 		{
 			cmd:    "	8",
 			init:   position{start: last, end: last, dot: last},
@@ -105,9 +112,9 @@ func TestParser(t *testing.T) {
 			expect: position{start: 1, end: last, dot: 5, addrc: 2},
 		},
 		{
-			cmd:    "3;",
+			cmd:    "3,;",
 			init:   position{start: 5, end: 5, dot: 5},
-			expect: position{start: 3, end: 3, dot: 5, addrc: 1},
+			expect: position{start: 3, end: 26, dot: 3, addrc: 2},
 		},
 		{
 			cmd:    ";",
@@ -148,8 +155,10 @@ func TestParser(t *testing.T) {
 		// Error cases, some of these positions that are expected do not make
 		// sense but since we are not executing any command _after_ them, i.e.
 		// we are not checking the range with [ed.check], so it is fine.
-
+		{cmd: "?test?", empty: true, err: ErrNoMatch},
+		{cmd: "'z", err: ErrInvalidMark},
 		{cmd: "'f", err: ErrInvalidAddress},
+		{cmd: "1'a", err: ErrInvalidAddress},
 		{cmd: "1," + fmt.Sprint(last+20), err: ErrInvalidAddress, expect: position{start: 0, end: 1, dot: 0, addrc: 2}},
 		{cmd: "']", err: ErrInvalidMark},
 		{cmd: "1.", err: ErrInvalidAddress},
@@ -162,8 +171,10 @@ func TestParser(t *testing.T) {
 	}
 	for _, tt := range tests {
 		var ted = New(WithStdout(io.Discard), WithStderr(io.Discard))
-		setupMemoryFile(ted, dummyFile)
-		ted.mark[0] = 1 // Set the mark a as the first line to test it later.
+		if !tt.empty {
+			setupMemoryFile(ted, dummyFile)
+			ted.mark[0] = 1 // Set the mark a as the first line to test it later.
+		}
 		t.Run(tt.cmd, func(t *testing.T) {
 			ted.in = strings.NewReader(tt.cmd)
 			setPosition(ted, tt.init)
