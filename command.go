@@ -151,6 +151,7 @@ func (ed *Editor) getCmdList() (string, error) {
 		if strings.HasSuffix(ln, sep) {
 			ln = strings.TrimSuffix(ln, sep)
 			done = false
+			ed.token()
 		}
 		s += ln
 		if !done {
@@ -665,9 +666,9 @@ func (ed *Editor) do() (err error) {
 			ed.printErrors = !ed.printErrors
 		}
 		if ed.error != nil {
-			fmt.Fprintln(ed.err, ed.error)
+			return explainError{err: ed.error}
 		}
-		return nil
+		return ed.error
 	case 'i':
 		ed.token()
 		if ed.end == 0 {
@@ -796,9 +797,11 @@ func (ed *Editor) do() (err error) {
 				ed.ss |= subPrint
 				ed.token()
 			case ed.tok == 'r':
+				// TODO(thimc): substitute: Implement 'r'
 				ed.ss |= subLastRegex
 				ed.token()
 			case unicode.IsDigit(ed.tok):
+				// TODO(thimc):  ubstitute: Implement '0'..'9'
 				nth, err = ed.scanNumber()
 				if err != nil {
 					return ErrNumberOutOfRange
@@ -1008,3 +1011,8 @@ func (ed *Editor) do() (err error) {
 	}
 	return ErrUnknownCmd
 }
+
+// explainError is a type of error that is used to explain the editors actual error.
+type explainError struct{ err error }
+
+func (e explainError) Error() string { return e.err.Error() }

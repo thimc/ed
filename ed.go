@@ -216,8 +216,16 @@ func WithScripted(t bool) OptionFunc {
 	}
 }
 
+// wrapError takes an error and stores it, it returns the default
+// error, [ErrDefault], if [ed.printErrors] is set to false. It returns
+// a [explainError] if the 'h' command was just executed.  wrapError
+// always returns the actual error along with additional information
+// if the editor is running in scripted mode.
 func (ed *Editor) wrapError(err error) error {
 	ed.error = err
+	if ex, ok := err.(explainError); ok {
+		return ex
+	}
 	if !ed.printErrors {
 		return ErrDefault
 	}
