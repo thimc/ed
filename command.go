@@ -904,8 +904,10 @@ func (ed *Editor) do() (err error) {
 		if !unicode.IsSpace(quit) && quit != 'Q' && quit != 'q' {
 			return ErrUnexpectedCmdSuffix
 		}
-		ed.token()
-		path = ed.scanString()
+		if ed.tok != EOF && ed.tok != '\n' {
+			ed.token()
+			path = ed.scanString()
+		}
 		if path == "" {
 			if ed.path == "" {
 				return ErrNoFileName
@@ -960,7 +962,11 @@ func (ed *Editor) do() (err error) {
 		if err := ed.getCmdSuffix(); err != nil {
 			return err
 		}
-		var err = ed.displayLines(ed.end, min(len(ed.lines), ed.end+ed.scroll), ed.cs)
+		var n = len(ed.lines)
+		if ed.end+ed.scroll < len(ed.lines) {
+			n = ed.end + ed.scroll
+		}
+		var err = ed.displayLines(ed.end, n, ed.cs)
 		ed.cs = 0
 		return err
 	case '=':

@@ -38,7 +38,10 @@ func (ed *Editor) parse() error {
 			ed.dot = addr
 		}
 	}
-	if ed.addrc = min(ed.addrc, 2); ed.addrc == 1 || ed.end != addr {
+	if ed.addrc > 2 {
+		ed.addrc = 2
+	}
+	if ed.addrc == 1 || ed.end != addr {
 		ed.start = ed.end
 	}
 
