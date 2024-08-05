@@ -452,23 +452,16 @@ func (ed *Editor) writeFile(path string, mod rune, start, end int) error {
 		return err
 	}
 	defer file.Close()
-	var siz int
-	if start >= 1 {
-		start--
-	}
-	for i := start; i != end; i++ {
-		var line string = ed.lines[i] + "\n"
-		n, err := file.WriteString(line)
-		if err != nil || n != len(line) {
-			return ErrCannotWriteFile
-		}
-		siz += len(line)
+	siz, err := file.WriteString(strings.Join(ed.lines[start-1:end], "\n") + "\n")
+	if err != nil {
+		return ErrCannotWriteFile
 	}
 	ed.modified = false
 	if !ed.silent {
 		fmt.Fprintln(ed.err, siz)
 	}
 	return err
+
 }
 
 func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int, action *[]undoAction) error {
