@@ -286,6 +286,9 @@ loop:
 			})
 			ed.dot = start
 			ed.modified = true
+			if ed.scripted {
+				ed.lineno++
+			}
 		}
 	}
 	return nil
