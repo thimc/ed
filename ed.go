@@ -134,6 +134,7 @@ func New(opts ...OptionFunc) *Editor {
 		out:      os.Stdout,
 		err:      os.Stderr,
 		prompt:   DefaultPrompt,
+		lineno:   1,
 	}
 	for _, opt := range opts {
 		opt(ed)
