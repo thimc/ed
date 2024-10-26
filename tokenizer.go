@@ -6,9 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-// EOF symbolizes the end of the file. It's value is set to the maximum
-// value of a UTF-8 encoded rune, but the value itself has no meaning.
-const EOF rune = utf8.UTFMax
+const EOF rune = -1
 
 // tokenizer is a buffered IO reader that implements peek functionality.
 type tokenizer struct {
@@ -17,17 +15,15 @@ type tokenizer struct {
 	*bufio.Reader
 }
 
-// newTokenizer creates a new Tokenizer and initializes the underlying
-// `bufio.Reader` to `r`.
+// newTokenizer creates a new Tokenizer.
 func newTokenizer(r io.Reader) *tokenizer {
 	return &tokenizer{
 		Reader: bufio.NewReader(r),
 	}
 }
 
-// token reads (consumes) one rune from the input and returns it. On
-// error it returns EOF as a rune.
-func (t *tokenizer) token() rune {
+// consume consumes one rune from the input and returns it.
+func (t *tokenizer) consume() rune {
 	var err error
 	t.tok, _, err = t.ReadRune()
 	if err != nil {
@@ -38,11 +34,10 @@ func (t *tokenizer) token() rune {
 	return t.tok
 }
 
-// peek peeks at the next token rune without consuming it. On error it
-// returns EOF as a rune.
+// peek peeks at the next token rune without consuming it.
 func (t *tokenizer) peek() rune {
-	if t.tok == EOF {
-		return t.tok
+	if t.Buffered() < 1 || t.tok == EOF {
+		return EOF
 	}
 	for n := utf8.UTFMax; n > 0; n-- {
 		b, err := t.Peek(n)
