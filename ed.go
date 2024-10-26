@@ -248,7 +248,7 @@ func (ed *Editor) Do() error {
 	if !ed.scripted || ed.tokenizer == nil {
 		ed.tokenizer = newTokenizer(ed.in)
 	}
-	if ed.token() == EOF {
+	if ed.consume() == EOF {
 		if !ed.modified {
 			return io.EOF
 		}
@@ -288,7 +288,7 @@ func (ed *Editor) shell(cmd string) ([]string, error) {
 	}
 
 	t := newTokenizer(strings.NewReader(cmd))
-	t.token()
+	t.consume()
 	var parsed string
 	for t.tok != EOF {
 		parsed += string(t.tok)
@@ -296,10 +296,10 @@ func (ed *Editor) shell(cmd string) ([]string, error) {
 			if ed.path == "" {
 				return nil, ErrNoFileName
 			}
-			t.token()
+			t.consume()
 			parsed += ed.path
 		}
-		t.token()
+		t.consume()
 	}
 	c := exec.Command(DefaultShell, "-c", parsed)
 	output, err := c.Output()

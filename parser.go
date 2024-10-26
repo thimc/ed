@@ -34,7 +34,7 @@ func (ed *Editor) parse() error {
 		ed.end = addr
 		if ed.tok != ',' && ed.tok != ';' {
 			break
-		} else if ed.token() == ';' {
+		} else if ed.consume() == ';' {
 			ed.dot = addr
 		}
 	}
@@ -62,7 +62,7 @@ func (ed *Editor) nextAddress() (int, error) {
 		case unicode.IsDigit(ed.tok) || ed.tok == '+' || ed.tok == '-' || ed.tok == '^':
 			mod := ed.tok
 			if !unicode.IsDigit(mod) {
-				ed.token()
+				ed.consume()
 			}
 			var n int
 			ed.skipWhitespace()
@@ -90,13 +90,13 @@ func (ed *Editor) nextAddress() (int, error) {
 			if ed.tok == '.' {
 				addr = ed.dot
 			}
-			ed.token()
+			ed.consume()
 		case ed.tok == '?', ed.tok == '/':
 			if !first {
 				return -1, ErrInvalidAddress
 			}
 			var mod = ed.tok
-			ed.token()
+			ed.consume()
 			var search = ed.scanStringUntil(mod)
 			re, err := regexp.Compile(search)
 			if err != nil {
@@ -145,7 +145,7 @@ func (ed *Editor) nextAddress() (int, error) {
 			if !first {
 				return -1, ErrInvalidAddress
 			}
-			var r = ed.token()
+			var r = ed.consume()
 			if r == EOF || !unicode.IsLower(r) {
 				return -1, ErrInvalidMark
 			}
@@ -158,7 +158,7 @@ func (ed *Editor) nextAddress() (int, error) {
 				return -1, ErrInvalidAddress
 			}
 			addr = maddr
-			ed.token()
+			ed.consume()
 		case ed.tok == '%' || ed.tok == ',' || ed.tok == ';':
 			if first {
 				ed.addrc++
@@ -166,7 +166,7 @@ func (ed *Editor) nextAddress() (int, error) {
 				if ed.tok == ';' {
 					ed.end = ed.dot
 				}
-				ed.token()
+				ed.consume()
 				if addr, err = ed.nextAddress(); err != nil {
 					addr = len(ed.lines)
 				}
@@ -205,7 +205,7 @@ func (ed *Editor) scanNumber() (int, error) {
 	var s string
 	for unicode.IsDigit(ed.tok) {
 		s += string(ed.tok)
-		ed.token()
+		ed.consume()
 	}
 	return strconv.Atoi(s)
 }
@@ -215,7 +215,7 @@ func (ed *Editor) scanString() string {
 	var str string
 	for ed.tok != EOF && ed.tok != '\n' {
 		str += string(ed.tok)
-		ed.token()
+		ed.consume()
 	}
 	return str
 }
@@ -227,16 +227,16 @@ func (ed *Editor) scanStringUntil(delim rune) string {
 	var str string
 	for ed.tok != EOF && ed.tok != '\n' && ed.tok != delim {
 		str += string(ed.tok)
-		ed.token()
+		ed.consume()
 	}
 	if ed.tok == delim {
-		ed.token()
+		ed.consume()
 	}
 	return str
 }
 
 func (e *Editor) skipWhitespace() {
 	for e.tok == ' ' || e.tok == '\t' {
-		e.token()
+		e.consume()
 	}
 }

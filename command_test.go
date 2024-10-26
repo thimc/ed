@@ -39,6 +39,12 @@ func TestCmdAppend(t *testing.T) {
 			init:           position{start: 3, end: 3, dot: 3, addrc: 0},
 			expect:         position{start: 1, end: 3, dot: 6, addrc: 2},
 		},
+		{
+			cmd:            "0a\nA\n.\n",
+			buffer:         []string{},
+			expectedBuffer: []string{"A"},
+			expect:         position{start: 0, end: 0, dot: 1, addrc: 0},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.cmd), func(t *testing.T) {

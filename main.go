@@ -17,8 +17,8 @@
 //	,p : Prints the entire buffer
 //	q  : Quit ed
 //
-// For more information, see the ed manual page or the OpenBSD
-// documentation: https://man.openbsd.org/ed.1
+// For more information, see the ed manual page or the OpenBSD documentation:
+// https://man.openbsd.org/ed.1
 package main
 
 import (
@@ -38,7 +38,10 @@ var (
 
 func main() {
 	flag.Parse()
-	fi, _ := os.Stdin.Stat()
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		panic(err)
+	}
 	var (
 		args     = flag.Args()
 		terminal = (fi.Mode() & os.ModeCharDevice) > 0

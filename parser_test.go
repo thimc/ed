@@ -179,7 +179,7 @@ func TestParser(t *testing.T) {
 			ted.in = strings.NewReader(tt.cmd)
 			setPosition(ted, tt.init)
 			ted.tokenizer = newTokenizer(ted.in)
-			ted.token()
+			ted.consume()
 			if err := ted.parse(); err != tt.err {
 				t.Fatalf("expected error %q, got %q", tt.err, err)
 			}
@@ -207,7 +207,7 @@ func TestParser(t *testing.T) {
 		t.Run(tt.cmd, func(t *testing.T) {
 			ted.in = strings.NewReader(tt.cmd)
 			ted.tokenizer = newTokenizer(ted.in)
-			ted.token()
+			ted.consume()
 			if err := ted.parse(); err != nil {
 				t.Fatalf("parse: %q", err)
 			}

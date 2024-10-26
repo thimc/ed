@@ -39,13 +39,13 @@ func (ed *Editor) getCmdSuffix() error {
 		switch ed.tok {
 		case 'p':
 			ed.cs |= cmdSuffixPrint
-			ed.token()
+			ed.consume()
 		case 'l':
 			ed.cs |= cmdSuffixList
-			ed.token()
+			ed.consume()
 		case 'n':
 			ed.cs |= cmdSuffixNumber
-			ed.token()
+			ed.consume()
 		default:
 			done = true
 		}
@@ -113,7 +113,7 @@ func (ed *Editor) buildList(r rune) error {
 	if delim == ' ' || delim == '\n' || delim == EOF {
 		return ErrInvalidPatternDelim
 	}
-	ed.token()
+	ed.consume()
 	search = ed.scanStringUntil(delim)
 	re, err := regexp.Compile(search)
 	if err != nil {
@@ -151,7 +151,7 @@ func (ed *Editor) getCmdList() (string, error) {
 		if strings.HasSuffix(ln, sep) {
 			ln = strings.TrimSuffix(ln, sep)
 			done = false
-			ed.token()
+			ed.consume()
 		}
 		s += ln
 		if !done {
@@ -191,7 +191,7 @@ func (ed *Editor) global(r rune) error {
 		ed.globalCmd = cmdlist
 	}()
 	if interact && ed.tok == '\n' {
-		ed.token()
+		ed.consume()
 	}
 	var size int = len(ed.lines)
 	for _, i := range ed.list {
@@ -217,7 +217,7 @@ func (ed *Editor) global(r rune) error {
 			cmdlist = ln
 		}
 		ed.tokenizer = newTokenizer(strings.NewReader(cmdlist))
-		ed.token()
+		ed.consume()
 		if err := ed.parse(); err != nil {
 			return err
 		}
@@ -486,29 +486,29 @@ func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int, action 
 				end   = match[1]
 				t     = newTokenizer(strings.NewReader(replace))
 			)
-			t.token()
+			t.consume()
 			var r string
 			for t.tok != EOF {
 				if (t.tok != '\\' && t.peek() == '&') || (t.tokpos == 1 && t.tok == '&') {
 					if t.tokpos > 1 {
 						r += string(t.tok)
-						t.token()
+						t.consume()
 					}
-					t.token()
+					t.consume()
 					r += ed.lines[i][start:end]
 					continue
 				} else if t.tok == '\\' && unicode.IsDigit(t.peek()) {
-					t.token()
+					t.consume()
 					n, err := strconv.Atoi(string(t.tok))
 					if err != nil {
 						return ErrNumberOutOfRange
 					}
-					t.token()
+					t.consume()
 					r += submatch[0][n-1]
 					continue
 				}
 				r += string(t.tok)
-				t.token()
+				t.consume()
 			}
 			var replaced = ed.lines[i][:start] + r + ed.lines[i][end:]
 			*action = append(*action,
@@ -555,13 +555,13 @@ func (ed *Editor) do() (err error) {
 	ed.skipWhitespace()
 	switch ed.tok {
 	case 'a':
-		ed.token()
+		ed.consume()
 		if err := ed.getCmdSuffix(); err != nil {
 			return err
 		}
 		return ed.appendLines(ed.end, &action)
 	case 'c':
-		ed.token()
+		ed.consume()
 		if err := ed.check(ed.dot, ed.dot); err != nil {
 			return err
 		}
@@ -573,7 +573,7 @@ func (ed *Editor) do() (err error) {
 		}
 		return ed.appendLines(ed.dot, &action)
 	case 'd':
-		ed.token()
+		ed.consume()
 		if err := ed.check(ed.dot, ed.dot); err != nil {
 			return err
 		}
@@ -591,7 +591,7 @@ func (ed *Editor) do() (err error) {
 		return nil
 	case 'E', 'e':
 		var mod = ed.tok
-		ed.token()
+		ed.consume()
 		if ed.addrc > 0 {
 			return ErrUnexpectedAddress
 		}
@@ -615,7 +615,7 @@ func (ed *Editor) do() (err error) {
 		// }
 		return ed.readFile(ed.scanString())
 	case 'f':
-		ed.token()
+		ed.consume()
 		var path string
 		if ed.addrc > 0 {
 			return ErrUnexpectedAddress
@@ -639,7 +639,7 @@ func (ed *Editor) do() (err error) {
 		return nil
 	case 'V', 'G', 'v', 'g':
 		var mod = ed.tok
-		ed.token()
+		ed.consume()
 		if ed.g {
 			return ErrCannotNestGlobal
 		} else if err := ed.check(1, len(ed.lines)); err != nil {
@@ -651,7 +651,7 @@ func (ed *Editor) do() (err error) {
 		return ed.global(mod)
 	case 'h', 'H':
 		var mod = ed.tok
-		ed.token()
+		ed.consume()
 		if ed.addrc > 0 {
 			return ErrUnexpectedAddress
 		}
@@ -666,7 +666,7 @@ func (ed *Editor) do() (err error) {
 		}
 		return ed.error
 	case 'i':
-		ed.token()
+		ed.consume()
 		if ed.end == 0 {
 			ed.end = 1
 		}
@@ -675,7 +675,7 @@ func (ed *Editor) do() (err error) {
 		}
 		return ed.appendLines(ed.end-1, &action)
 	case 'j':
-		ed.token()
+		ed.consume()
 		if err := ed.check(ed.dot, ed.dot+1); err != nil {
 			return err
 		}
@@ -689,12 +689,12 @@ func (ed *Editor) do() (err error) {
 		}
 		return nil
 	case 'k':
-		ed.token()
+		ed.consume()
 		if ed.end == 0 {
 			return ErrInvalidAddress
 		}
 		var m = ed.tok
-		ed.token()
+		ed.consume()
 		if err := ed.getCmdSuffix(); err != nil {
 			return err
 		}
@@ -722,7 +722,7 @@ func (ed *Editor) do() (err error) {
 		ed.cs = 0
 		return err
 	case 'm':
-		ed.token()
+		ed.consume()
 		if err := ed.check(ed.dot, ed.dot); err != nil {
 			return err
 		}
@@ -738,7 +738,7 @@ func (ed *Editor) do() (err error) {
 		}
 		return ed.moveLines(addr, &action)
 	case 'P':
-		ed.token()
+		ed.consume()
 		if ed.addrc > 0 {
 			return ErrUnexpectedAddress
 		}
@@ -749,7 +749,7 @@ func (ed *Editor) do() (err error) {
 		return nil
 	case 'q', 'Q':
 		var mod = ed.tok
-		ed.token()
+		ed.consume()
 		if ed.addrc > 0 {
 			return ErrUnexpectedAddress
 		}
@@ -759,7 +759,7 @@ func (ed *Editor) do() (err error) {
 		}
 		os.Exit(0)
 	case 'r':
-		if !unicode.IsSpace(ed.token()) {
+		if !unicode.IsSpace(ed.consume()) {
 			return ErrUnexpectedCmdSuffix
 		} else if ed.addrc == 0 {
 			ed.end = len(ed.lines)
@@ -781,21 +781,21 @@ func (ed *Editor) do() (err error) {
 			err   error
 			delim rune
 		)
-		ed.token()
+		ed.consume()
 		for {
 			switch {
 			case ed.tok == '\n':
 				ed.ss |= subRepeat
-				ed.token()
+				ed.consume()
 			case ed.tok == 'g':
 				ed.ss |= subGlobal
-				ed.token()
+				ed.consume()
 			case ed.tok == 'p':
 				ed.ss |= subPrint
-				ed.token()
+				ed.consume()
 			case ed.tok == 'r':
 				ed.ss |= subLastRegex
-				ed.token()
+				ed.consume()
 			case unicode.IsDigit(ed.tok):
 				nth, err = ed.scanNumber()
 				if err != nil {
@@ -818,7 +818,7 @@ func (ed *Editor) do() (err error) {
 			nth = -1
 		}
 		delim = ed.tok
-		ed.token()
+		ed.consume()
 		if delim == ' ' || delim == '\n' && ed.peek() == '\n' {
 			return ErrInvalidPatternDelim
 		}
@@ -877,7 +877,7 @@ func (ed *Editor) do() (err error) {
 		}
 		return ed.substitute(re, replace, nth, &action)
 	case 't':
-		ed.token()
+		ed.consume()
 		if err := ed.check(ed.dot, ed.dot); err != nil {
 			return err
 		}
@@ -890,7 +890,7 @@ func (ed *Editor) do() (err error) {
 		}
 		return ed.copyLines(addr, &action)
 	case 'u':
-		ed.token()
+		ed.consume()
 		if ed.addrc > 0 {
 			return ErrUnexpectedAddress
 		}
@@ -901,14 +901,14 @@ func (ed *Editor) do() (err error) {
 	case 'W', 'w':
 		var (
 			mod  = ed.tok
-			quit = ed.token()
+			quit = ed.consume()
 			path string
 		)
 		if !unicode.IsSpace(quit) && quit != 'Q' && quit != 'q' {
 			return ErrUnexpectedCmdSuffix
 		}
 		if ed.tok != EOF && ed.tok != '\n' {
-			ed.token()
+			ed.consume()
 			path = ed.scanString()
 		}
 		if path == "" {
@@ -937,7 +937,7 @@ func (ed *Editor) do() (err error) {
 		}
 		return nil
 	case 'x':
-		ed.token()
+		ed.consume()
 		if ed.addrc > 0 {
 			return ErrUnexpectedAddress
 		}
@@ -946,7 +946,7 @@ func (ed *Editor) do() (err error) {
 		}
 		return ErrCryptUnavailable
 	case 'z':
-		ed.token()
+		ed.consume()
 		ed.start = 1
 		if err := ed.check(ed.start, ed.dot+1); err != nil {
 			return err
@@ -954,7 +954,7 @@ func (ed *Editor) do() (err error) {
 			var s string
 			for unicode.IsDigit(ed.tok) {
 				s += string(ed.tok)
-				ed.token()
+				ed.consume()
 			}
 			var err error
 			ed.scroll, err = strconv.Atoi(s)
@@ -973,7 +973,7 @@ func (ed *Editor) do() (err error) {
 		ed.cs = 0
 		return err
 	case '=':
-		ed.token()
+		ed.consume()
 		if err := ed.getCmdSuffix(); err != nil {
 			return err
 		}
@@ -984,7 +984,7 @@ func (ed *Editor) do() (err error) {
 		fmt.Fprintln(ed.out, n)
 		return nil
 	case '!':
-		ed.token()
+		ed.consume()
 		if ed.addrc > 0 {
 			return ErrUnexpectedAddress
 		}
