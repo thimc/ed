@@ -963,8 +963,8 @@ func TestCmdSubstitute(t *testing.T) {
 			err:            []error{nil},
 		},
 		{
-			cmd:            []string{"3,5s/ ./X/\n"},
-			expectedBuffer: []string{"A A A A A", "A A A A A", "BX B B B", "BX B B B", "CX C C C", "C C C C C", "D D D D D", "D D D D D"},
+			cmd:            []string{`3,5s/ (.)(.)/_\2_\1X\2_/` + "\n"},
+			expectedBuffer: []string{"A A A A A", "A A A A A", "B_ _BX _B B B", "B_ _BX _B B B", "C_ _CX _C C C", "C C C C C", "D D D D D", "D D D D D"},
 			expect:         position{start: 3, end: 5, dot: 5, addrc: 2},
 			err:            []error{nil},
 		},

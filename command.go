@@ -504,7 +504,7 @@ func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int, action 
 						return ErrNumberOutOfRange
 					}
 					t.consume()
-					r += submatch[0][n-1]
+					r += submatch[0][n]
 					continue
 				}
 				r += string(t.tok)
