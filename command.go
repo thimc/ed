@@ -503,6 +503,9 @@ func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int, action 
 					if err != nil {
 						return ErrNumberOutOfRange
 					}
+					if n >= len(submatch[0]) {
+						return ErrNumberOutOfRange
+					}
 					t.consume()
 					r += submatch[0][n]
 					continue
