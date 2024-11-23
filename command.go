@@ -469,7 +469,7 @@ func (ed *Editor) writeFile(path string, mod rune, start, end int) error {
 
 func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int, action *[]undoAction) error {
 	var subs int
-	for i := 0; i <= ed.end-ed.start; i++ {
+	for i := ed.start - 1; i < ed.end; i++ {
 		if !re.MatchString(ed.lines[i]) {
 			continue
 		}

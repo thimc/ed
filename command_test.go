@@ -963,6 +963,12 @@ func TestCmdSubstitute(t *testing.T) {
 			err:            []error{nil},
 		},
 		{
+			cmd:            []string{"3,5s/ ./X/\n"},
+			expectedBuffer: []string{"A A A A A", "A A A A A", "BX B B B", "BX B B B", "CX C C C", "C C C C C", "D D D D D", "D D D D D"},
+			expect:         position{start: 3, end: 5, dot: 5, addrc: 2},
+			err:            []error{nil},
+		},
+		{
 			cmd:               []string{",s/A/z/p\n", ",s\n"},
 			expectedBuffer:    []string{"z z A A A", "z z A A A", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"},
 			expect:            position{start: 1, end: 8, dot: 2, addrc: 2},
@@ -997,9 +1003,9 @@ func TestCmdSubstitute(t *testing.T) {
 		},
 		{
 			cmd:               []string{"s/.*/some/nl\n", ",sp}\n"},
-			expectedBuffer:    append([]string{"some"}, buffer[1:]...),
-			expectedOutput:    "1\tsome$\n",
-			expect:            position{start: 1, end: last, dot: 1, addrc: 2},
+			expectedBuffer:    append(append([]string{}, buffer[:len(buffer)-1]...), "some"),
+			expectedOutput:    "8\tsome$\n",
+			expect:            position{start: 1, end: last, dot: 8, addrc: 2},
 			err:               []error{nil, ErrInvalidCmdSuffix},
 			expectedSubSuffix: subPrint,
 		},
