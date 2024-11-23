@@ -536,7 +536,7 @@ func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int, action 
 	ed.replacestr = replace
 	if subs == 0 && !ed.g {
 		return ErrNoMatch
-	} else if ed.g && ed.cs&cmdSuffixPrint|cmdSuffixNumber|cmdSuffixList > 0 {
+	} else if ed.g && ed.cs&(cmdSuffixPrint|cmdSuffixNumber|cmdSuffixList) > 0 {
 		return ed.displayLines(ed.dot, ed.dot, ed.cs)
 	}
 	return nil
