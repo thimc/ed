@@ -469,7 +469,7 @@ func (ed *Editor) writeFile(path string, mod rune, start, end int) error {
 
 func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int, action *[]undoAction) error {
 	var subs int
-	for i := 0; i <= ed.end-ed.start; i++ {
+	for i := ed.start - 1; i < ed.end; i++ {
 		if !re.MatchString(ed.lines[i]) {
 			continue
 		}
@@ -503,8 +503,11 @@ func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int, action 
 					if err != nil {
 						return ErrNumberOutOfRange
 					}
+					if n >= len(submatch[0]) {
+						return ErrNumberOutOfRange
+					}
 					t.consume()
-					r += submatch[0][n-1]
+					r += submatch[0][n]
 					continue
 				}
 				r += string(t.tok)
@@ -533,7 +536,7 @@ func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int, action 
 	ed.replacestr = replace
 	if subs == 0 && !ed.g {
 		return ErrNoMatch
-	} else if ed.g && ed.cs&cmdSuffixPrint|cmdSuffixNumber|cmdSuffixList > 0 {
+	} else if ed.g && ed.cs&(cmdSuffixPrint|cmdSuffixNumber|cmdSuffixList) > 0 {
 		return ed.displayLines(ed.dot, ed.dot, ed.cs)
 	}
 	return nil
