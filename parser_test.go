@@ -3,223 +3,88 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
-	"reflect"
+	"regexp/syntax"
 	"strings"
 	"testing"
 )
 
-func setPosition(ted *Editor, pos position) {
-	ted.start = pos.start
-	ted.end = pos.end
-	ted.dot = pos.dot
-	ted.addrc = pos.addrc
-}
-
-var dummyFile = []string{
-	"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-	"N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-}
-
-// setupMemoryFile initializes a in-memory buffer
-func setupMemoryFile(ed *Editor, buf []string) {
-	ed.lines = make([]string, len(buf))
-	copy(ed.lines, buf)
-	ed.path = "test"
-	ed.dot = len(buf)
-	ed.printErrors = true
-}
-
-// createDummyFile creates a dummy file `fname` containing `dummyFile`.
-func createDummyFile(fname string, t *testing.T) {
-	file, err := os.Create(fname)
-	if err != nil {
-		t.Fatalf("create dummy file: %q", err)
-	}
-	defer file.Close()
-	if _, err = file.WriteString(strings.Join(dummyFile, "\n")); err != nil {
-		t.Fatalf("write dummy file: %q", err)
-	}
-}
-
 func TestParser(t *testing.T) {
-	var last = len(dummyFile)
+	lc := len(dummy.lines)
 	tests := []struct {
-		cmd    string
-		init   position
-		expect position
-		empty  bool
-		err    error
+		cmd   string
+		cur   cursor
+		keep  bool
+		empty bool
+		perr  error // parsing error
+		xerr  error // execution error
 	}{
-		{
-			cmd:    "",
-			init:   position{start: 1, end: 1, dot: last},
-			expect: position{start: last, end: last, dot: last},
-		},
-		{
-			cmd:    "	8",
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 8, end: 8, dot: last, addrc: 1},
-		},
-		{
-			cmd:    fmt.Sprint(last),
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: last, end: last, dot: last, addrc: 1},
-		},
-		{
-			cmd:    "1,5",
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 1, end: 5, dot: last, addrc: 2},
-		},
-		{
-			cmd:    "+",
-			init:   position{start: 2, end: 2, dot: 2},
-			expect: position{start: 3, end: 3, dot: 2, addrc: 1},
-		},
-		{
-			cmd:    "-",
-			init:   position{start: 3, end: 3, dot: 3},
-			expect: position{start: 2, end: 2, dot: 3, addrc: 1},
-		},
-		{
-			cmd:    "^",
-			init:   position{start: 3, end: 3, dot: 3},
-			expect: position{start: 2, end: 2, dot: 3, addrc: 1},
-		},
-		{
-			cmd:    ".,+5",
-			init:   position{start: 4, end: 4, dot: 4},
-			expect: position{start: 4, end: 9, dot: 4, addrc: 2},
-		},
-		{
-			cmd:    "-2,+5",
-			init:   position{start: 5, end: 5, dot: 5},
-			expect: position{start: 3, end: 10, dot: 5, addrc: 2},
-		},
-		{
-			cmd:    ",",
-			init:   position{start: 5, end: 5, dot: 5},
-			expect: position{start: 1, end: last, dot: 5, addrc: 2},
-		},
-		{
-			cmd:    "10,",
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 10, end: 10, dot: last, addrc: 1},
-		},
-		{
-			cmd:    "6,%",
-			init:   position{start: 5, end: 5, dot: 5},
-			expect: position{start: 1, end: last, dot: 5, addrc: 2},
-		},
-		{
-			cmd:    "3,;",
-			init:   position{start: 5, end: 5, dot: 5},
-			expect: position{start: 3, end: 26, dot: 3, addrc: 2},
-		},
-		{
-			cmd:    ";",
-			init:   position{start: 5, end: 5, dot: 5},
-			expect: position{start: 5, end: last, dot: 5, addrc: 2},
-		},
-		{
-			cmd:    "/D/\n//",
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 4, end: 4, dot: last, addrc: 1},
-		},
-		{
-			cmd:    "?E?\n??",
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 5, end: 5, dot: last, addrc: 1},
-		},
-		{
-			cmd:    "'a",
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 1, end: 1, dot: last, addrc: 1},
-		},
-		{
-			cmd:    "1,/^F$/-",
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 1, end: 5, dot: last, addrc: 2},
-		},
-		{
-			cmd:    "?D?,?B?+",
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 4, end: 3, dot: last, addrc: 2},
-		},
-		{
-			cmd:    "/^A$/,/^D$/+",
-			init:   position{start: last, end: last, dot: last},
-			expect: position{start: 1, end: 5, dot: last, addrc: 2},
-		},
+		{cmd: "2,4", cur: cursor{first: 2, second: 4, dot: lc, addrc: 2}},
+		{cmd: "3;10", cur: cursor{first: 3, second: 10, dot: 3, addrc: 2}},
+		{cmd: ";6", cur: cursor{first: lc, second: 6, dot: lc, addrc: 2}},
+		{cmd: "3,6", cur: cursor{first: 3, second: 6, dot: lc, addrc: 2}},
+		{cmd: "/C/,?G?", cur: cursor{first: 3, second: 7, dot: lc, addrc: 2}},
+		{cmd: "/", cur: cursor{first: 7, second: 7, dot: 7, addrc: 1}, keep: true},
+		{cmd: "1,?Z?", cur: cursor{first: 1, second: lc, dot: lc, addrc: 2}},
+		{cmd: "1,", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}},
+		{cmd: "5", cur: cursor{first: 5, second: 5, dot: lc, addrc: 1}},
+		{cmd: ".,+7", cur: cursor{first: 5, second: 12, dot: 5, addrc: 2}, keep: true},
+		{cmd: "'a", cur: cursor{first: 3, second: 3, dot: lc, addrc: 1}},
+		{cmd: "%", cur: cursor{first: 1, second: lc, dot: lc, addrc: 2}},
+		{cmd: "$", cur: cursor{first: lc, second: lc, dot: lc, addrc: 1}},
+		{cmd: "-", cur: cursor{first: lc - 1, second: lc - 1, dot: lc, addrc: 1}},
+		{cmd: "^", cur: cursor{first: lc - 1, second: lc - 1, dot: lc, addrc: 1}},
+		{cmd: "+", cur: cursor{first: lc, second: lc, dot: lc - 1, addrc: 1}, keep: true},
+		{cmd: "", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}},
 
-		// Error cases, some of these positions that are expected do not make
-		// sense but since we are not executing any command _after_ them, i.e.
-		// we are not checking the range with [ed.check], so it is fine.
-		{cmd: "?test?", empty: true, err: ErrNoMatch},
-		{cmd: "'z", err: ErrInvalidMark},
-		{cmd: "'f", err: ErrInvalidAddress},
-		{cmd: "1'a", err: ErrInvalidAddress},
-		{cmd: "1," + fmt.Sprint(last+20), err: ErrInvalidAddress, expect: position{start: 0, end: 1, dot: 0, addrc: 2}},
-		{cmd: "']", err: ErrInvalidMark},
-		{cmd: "1.", err: ErrInvalidAddress},
-		{cmd: "-999", err: ErrInvalidAddress, expect: position{addrc: 1}},
-		{cmd: "//", err: ErrNoPrevPattern},
-		{cmd: "1//", err: ErrInvalidAddress},
-		{cmd: "/non_existing_text/", err: ErrNoMatch},
-		{cmd: "??", err: ErrNoPrevPattern},
-		{cmd: fmt.Sprint(last + 1), err: ErrInvalidAddress, expect: position{addrc: 1}},
+		// error cases
+		{cmd: "0", cur: cursor{first: 0, second: 0, dot: lc, addrc: 1}, xerr: ErrInvalidAddress},
+		{cmd: fmt.Sprint(lc + 1), cur: cursor{first: lc, second: lc, dot: lc, addrc: 1}, perr: ErrInvalidAddress},
+		{cmd: "2.5", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, perr: ErrInvalidAddress},
+		{cmd: "//", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, perr: ErrNoPrevPattern},
+		{cmd: "/next line", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, perr: ErrNoMatch},
+		{cmd: "?prev line", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, empty: true, perr: ErrNoMatch},
+		{cmd: "/(abc/", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, perr: &syntax.Error{Code: syntax.ErrorCode("missing closing )"), Expr: "(abc"}},
+		{cmd: "5,'h", cur: cursor{first: 5, second: 5, dot: lc, addrc: 1}, perr: ErrInvalidAddress},
+		{cmd: "5/A/", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, perr: ErrInvalidAddress},
+		{cmd: "5'A", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, perr: ErrInvalidAddress},
+		{cmd: "'A", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, perr: ErrInvalidMark},
+		{cmd: "'@", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, perr: ErrInvalidMark},
+		{cmd: "9999999999999999999", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, perr: ErrNumberOutOfRange},
 	}
-	for _, tt := range tests {
-		var ted = New(WithStdout(io.Discard), WithStderr(io.Discard))
-		if !tt.empty {
-			setupMemoryFile(ted, dummyFile)
-			ted.mark[0] = 1 // Set the mark a as the first line to test it later.
-		}
-		t.Run(tt.cmd, func(t *testing.T) {
-			ted.in = strings.NewReader(tt.cmd)
-			setPosition(ted, tt.init)
-			ted.tokenizer = newTokenizer(ted.in)
-			ted.consume()
-			if err := ted.parse(); err != tt.err {
-				t.Fatalf("expected error %q, got %q", tt.err, err)
+
+	var ed *Editor
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%q", test.cmd), func(t *testing.T) {
+			if !test.keep {
+				ed = NewEditor(
+					withBuffer(dummy),
+					WithStdin(strings.NewReader(test.cmd)),
+					WithStdout(io.Discard),
+					WithStderr(io.Discard),
+				)
+			} else {
+				_ = ed.exec() // Needed to validate the [cursor]
 			}
-			got := position{start: ted.start, end: ted.end, dot: ted.dot, addrc: ted.addrc}
-			if !reflect.DeepEqual(got, tt.expect) {
-				t.Errorf("expected %+v, got %+v", tt.expect, got)
+			if test.empty {
+				ed.file.lines = []string{}
+			}
+			ed.doInput(test.cmd)
+			if err := ed.parse(); err != test.perr {
+				if synerr, ok := err.(*syntax.Error); ok {
+					// TODO: verify the regexp.syntax.Error
+					_ = synerr
+				} else {
+					t.Fatalf("want parse error: %+v, got %+v", test.perr, err)
+				}
+			}
+			if test.cur != ed.cursor {
+				t.Fatalf("want %+v, got %+v", test.cur, ed.cursor)
+			}
+			if test.xerr != nil {
+				if err := ed.exec(); err != test.xerr {
+					t.Fatalf("want exec error: %+v, got %+v", test.xerr, err)
+				}
 			}
 		})
 	}
-
-	tests2 := []struct {
-		cmd    string
-		expect position
-	}{
-		{cmd: "/F/\n", expect: position{start: 6, end: 6, dot: 52, addrc: 1}},
-		{cmd: "//\n", expect: position{start: 32, end: 32, dot: 6, addrc: 1}},
-		{cmd: "//\n", expect: position{start: 6, end: 6, dot: 32, addrc: 1}},
-		{cmd: "?D?\n", expect: position{start: 4, end: 4, dot: 6, addrc: 1}},
-		{cmd: "??\n", expect: position{start: 30, end: 30, dot: 4, addrc: 1}},
-		{cmd: "??\n", expect: position{start: 4, end: 4, dot: 30, addrc: 1}},
-	}
-	var ted = New(WithStdout(io.Discard), WithStderr(io.Discard))
-	setupMemoryFile(ted, append(dummyFile, dummyFile...))
-	for _, tt := range tests2 {
-		t.Run(tt.cmd, func(t *testing.T) {
-			ted.in = strings.NewReader(tt.cmd)
-			ted.tokenizer = newTokenizer(ted.in)
-			ted.consume()
-			if err := ted.parse(); err != nil {
-				t.Fatalf("parse: %q", err)
-			}
-			got := position{start: ted.start, end: ted.end, dot: ted.dot, addrc: ted.addrc}
-			if !reflect.DeepEqual(got, tt.expect) {
-				t.Fatalf("expected %+v, got %+v", tt.expect, got)
-			}
-			// TODO(thimc): To avoid executing Do() in the Parser tests we explicitly
-			// set the dot to the start address which is usually done in do() in the
-			// case where we don't have a follow up command, i.e the token being '\n'.
-			ted.dot = ted.start
-		})
-	}
-
 }

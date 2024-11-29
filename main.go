@@ -3,67 +3,52 @@
 //
 // Usage:
 //
-//	ed [-s] [-p prompt] [file]
+//	ed [-] [-s] [-p string] [file]
 //
-// Ed is a line-oriented text editor that operates on a file one line at a time.
+// ed is a line-oriented text editor that operates on a file one line at a time.
 // It's designed for editing small to medium-sized files, and its simplicity makes
 // it a great choice for quick edits or when you need to edit files in a script.
 //
-// Basic Commands:
+// Basic commands:
 //
 //	s/old/new/g : Substitutes all occurences of old with new on the current line
-//	d  : Delete the current line
-//	p  : Print the current line
-//	,p : Prints the entire buffer
-//	q  : Quit ed
+//	a           : Append lines at [dot] until the entered line only consists of a "."
+//	c           : Change lines selected by the range until the entered line only consists of a "."
+//	d           : Delete the current line
+//	p           : Print the current line
+//	,p          : Prints the entire buffer
+//	,n          : Prints the entire buffer but with line numbers
+//	q           : Quit ed
 //
-// For more information, see the ed manual page or the OpenBSD documentation:
-// https://man.openbsd.org/ed.1
+// For more information, refer to the OpenBSD man page: https://man.openbsd.org/ed.1
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
+	"path/filepath"
 )
 
 var (
-	// prompt sets the user prompt and implicitly enables the prompt option.
-	prompt = flag.String("p", "", "user prompt")
-	// silent surpresses diagnostics and should be if ed is used in scripts.
-	silent = flag.Bool("s", false, "suppress diagnostics")
+	Prompt = flag.String("p", "", "user prompt")
+	Silent = flag.Bool("s", false, "suppress diagnostics")
 )
 
 func main() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [-] [-s] [-p string] [file]\n", filepath.Base(os.Args[0]))
+		os.Exit(1)
+	}
 	flag.Parse()
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		panic(err)
-	}
-	var (
-		args     = flag.Args()
-		terminal = (fi.Mode() & os.ModeCharDevice) > 0
-	)
-	for n, arg := range os.Args {
+	opts := []Option{WithStdin(os.Stdin), WithPrompt(*Prompt), WithSilent(*Silent)}
+	if flag.NArg() > 0 {
+		arg := flag.Args()[0]
 		if arg == "-" {
-			*silent = true
-			args = append(args[:n-1], args[n:]...)
+			*Silent = true
+		} else {
+			opts = append(opts, WithFile(arg))
 		}
 	}
-	var options = []OptionFunc{WithPrompt(*prompt), WithSilent(*silent), WithScripted(!terminal)}
-	if len(args) == 1 {
-		// TODO(thimc): Support "binary mode" which replaces all
-		// instances of the null character with a newline.
-		options = append(options, WithFile(args[0]))
-	}
-	for ed := New(options...); ; {
-		if err := ed.Do(); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			fmt.Fprintln(os.Stderr, err)
-		}
-	}
+	NewEditor(opts...).Run()
 }
