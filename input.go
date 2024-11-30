@@ -36,6 +36,11 @@ func (i *input) token() rune {
 	return tok
 }
 
+func (i *input) insert(r rune) {
+	i.buf = string(r) + i.buf
+	i.pos = max(i.pos-1, 0)
+}
+
 func (i *input) Scan() bool {
 	eof := i.Scanner.Scan()
 	i.doInput(i.Scanner.Text())

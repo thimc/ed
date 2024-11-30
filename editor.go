@@ -127,7 +127,7 @@ func WithPrompt(prompt string) Option {
 func WithFile(path string) Option {
 	return func(ed *Editor) {
 		if err := ed.read(path); err != nil {
-			ed.errorln(err)
+			ed.errorln(true, err)
 		}
 	}
 }
@@ -176,7 +176,7 @@ func (ed *Editor) doPrompt() {
 	}
 }
 
-func (ed *Editor) errorln(err error) {
+func (ed *Editor) errorln(verbose bool, err error) {
 	if ed.token() == 'h' {
 		ed.consume()
 		if ed.err != nil {
@@ -187,7 +187,7 @@ func (ed *Editor) errorln(err error) {
 	ed.err = err
 	if ed.silent {
 		return
-	} else if ed.verbose {
+	} else if verbose {
 		if ed.script {
 			fmt.Fprintf(ed.stderr, "script, line: %d: %s\n", ed.lc, ed.err)
 			os.Exit(2)
@@ -224,7 +224,7 @@ func (ed *Editor) Run() {
 			break
 		}
 		if err != nil {
-			ed.errorln(err)
+			ed.errorln(ed.verbose, err)
 			continue
 		}
 		ed.err = nil
