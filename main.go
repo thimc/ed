@@ -41,7 +41,7 @@ func main() {
 		os.Exit(1)
 	}
 	flag.Parse()
-	opts := []Option{WithStdin(os.Stdin), WithPrompt(*Prompt), WithSilent(*Silent)}
+	opts := []Option{WithStdin(os.Stdin), WithPrompt(*Prompt)}
 	if flag.NArg() > 0 {
 		arg := flag.Args()[0]
 		if arg == "-" {
@@ -50,5 +50,6 @@ func main() {
 			opts = append(opts, WithFile(arg))
 		}
 	}
+	opts = append(opts, WithSilent(*Silent))
 	NewEditor(opts...).Run()
 }

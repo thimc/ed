@@ -91,6 +91,7 @@ func cmdDelete(ed *Editor) error {
 	if ed.dot+1 < len(ed.file.lines) {
 		ed.dot++
 	}
+	ed.undo.store(ed.g)
 	return nil
 }
 
@@ -162,7 +163,10 @@ func cmdGlobal(ed *Editor) error {
 			cmdlist = "p"
 		}
 	}
-	defer func() { ed.g = false }()
+	defer func() {
+		ed.g = false
+		ed.undo.storeGlobal()
+	}()
 	gs := ed.cs
 	nl := len(ed.file.lines)
 	for _, i := range ed.list {
@@ -238,11 +242,15 @@ func cmdJoin(ed *Editor) error {
 		return err
 	}
 	if ed.first != ed.second {
-		// TODO: undo
+		lines := make([]string, ed.second-ed.first+1)
+		copy(lines, ed.file.lines[ed.first-1:ed.second])
+		ed.undo.append(undoTypeAdd, ed.first, ed.second+len(lines)-1, ed.dot, lines)
 		ed.file.join(ed.first, ed.second)
+		ed.undo.append(undoTypeDelete, ed.first, ed.first, ed.dot, nil)
 		ed.dot = ed.second
 		ed.dirty = true
 	}
+	ed.undo.store(ed.g)
 	return nil
 }
 
@@ -296,8 +304,18 @@ func cmdMove(ed *Editor) error {
 	if err := ed.getSuffix(); err != nil {
 		return err
 	}
-	// TODO: undo move
+
+	lines := make([]string, ed.second-ed.first+1)
+	copy(lines, ed.file.lines[ed.first-1:ed.second])
+	ed.undo.append(undoTypeAdd, ed.first, ed.first+len(lines)-1, ed.dot, lines)
+
 	ed.dot = ed.file.move(ed.first, ed.second, addr)
+
+	ulines := make([]string, len(lines))
+	copy(ulines, ed.file.lines[addr-len(lines):addr])
+	ed.undo.append(undoTypeDelete, addr-ed.first+1, addr-ed.first+len(ulines), addr, ulines)
+
+	ed.undo.store(ed.g)
 	return nil
 }
 
@@ -397,7 +415,6 @@ func cmdSubstitute(ed *Editor) error {
 	}
 	delim := ed.token()
 	ed.consume()
-
 	re := ed.re
 	if sflags&subLastRegex == 0 {
 		search, eof := ed.scanStringUntil(delim)
@@ -478,10 +495,14 @@ func cmdTransfer(ed *Editor) error {
 	if err := ed.getSuffix(); err != nil {
 		return err
 	}
+	lines := make([]string, ed.second-ed.first+1)
+	copy(lines, ed.file.lines[ed.first-1:ed.second])
 	lc := ed.file.yank(ed.first, ed.second, addr)
+	ed.undo.append(undoTypeDelete, addr+1, addr+len(lines), ed.dot, lines)
 	ed.second = lc
 	ed.dot = addr + lc
 	ed.dirty = true
+	ed.undo.store(ed.g)
 	return nil
 }
 
@@ -493,7 +514,7 @@ func cmdUndo(ed *Editor) error {
 	if err := ed.getSuffix(); err != nil {
 		return err
 	}
-	return ed.undo.pop()
+	return ed.undo.pop(ed)
 }
 
 func cmdWrite(ed *Editor) error {

@@ -97,7 +97,7 @@ func TestEditor(t *testing.T) {
 
 		// i - insert
 		{cmd: "ip\nworld\n.", cur: cursor{first: lc, second: lc, dot: lc}, output: "world\n"},
-		// TODO: insert test when the file buffer is empty
+		// TODO(thimc): insert test when the file buffer is empty
 
 		// j - join
 		{cmd: fmt.Sprintf("%d,%dj", lc-1, lc), cur: cursor{first: lc - 1, second: lc, dot: lc, addrc: 2}},
@@ -119,7 +119,7 @@ func TestEditor(t *testing.T) {
 
 		// q - quit
 		{cmd: "1,2d\nq", cur: cursor{first: 1, second: 2, dot: 1, addrc: 2}, keep: true},
-		// TODO: succesful quit test
+		// TODO(thimc): succesful quit test
 
 		// r - read
 		{cmd: "r", cur: cursor{first: lc, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", lc*2)},
@@ -211,11 +211,11 @@ func TestEditor(t *testing.T) {
 		// k - mark
 		{cmd: "k!", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidMark},
 		{cmd: "k!z", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
-		// TODO: k test when the file buffer is empty
+		// TODO(thimc): k test when the file buffer is empty
 
 		// l, n, p - print
 		{cmd: "pz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
-		// TODO: print test when the file buffer is empty
+		// TODO(thimc): print test when the file buffer is empty
 
 		// m - move
 		{cmd: "1,5mz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrDestinationExpected},
@@ -239,7 +239,7 @@ func TestEditor(t *testing.T) {
 		{cmd: "rq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnexpectedCmdSuffix},
 		{cmd: "r non-existing-file", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrCannotReadFile},
 		{cmd: "r", cur: cursor{first: lc, second: lc, dot: lc}, path: true, err: ErrNoFileName},
-		// TODO: unsuccesful r (read) test with a command suffix. NOTE: I don't even know how to test this.
+		// TODO(thimc): unsuccesful r (read) test with a command suffix. NOTE: I don't even know how to test this.
 
 		// s - substitute
 		{cmd: "spz", cur: cursor{first: slc, second: slc, dot: slc}, err: ErrInvalidCmdSuffix, sub: true},
@@ -255,11 +255,11 @@ func TestEditor(t *testing.T) {
 		{cmd: "1,5tz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrDestinationExpected},
 		{cmd: "1,5t5z", cur: cursor{first: 1, second: 5, dot: lc, addrc: 1}, err: ErrInvalidCmdSuffix},
 
-		// TODO: transfer test when the file buffer is empty
+		// TODO(thimc): transfer test when the file buffer is empty
 		{cmd: ",d", cur: cursor{first: 1, second: lc, dot: 0, addrc: 2}, err: nil},
 		{cmd: "1,5t2", cur: cursor{addrc: 1}, err: ErrInvalidAddress, keep: true},
 
-		// TODO: undo tests
+		// TODO(thimc): undo tests
 		{cmd: "u", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrNothingToUndo},
 		{cmd: "uq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
 		{cmd: "1u", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
@@ -267,7 +267,7 @@ func TestEditor(t *testing.T) {
 		// w - write
 		{cmd: "wz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnexpectedCmdSuffix},
 		{cmd: "w", cur: cursor{first: slc, second: slc, dot: slc}, sub: true, err: ErrNoFileName},
-		// TODO: wq tests
+		// TODO(thimc): wq tests
 
 		// z - scroll
 		{cmd: "1z1234567891234567891234567890", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrNumberOutOfRange},
@@ -312,11 +312,11 @@ func TestEditor(t *testing.T) {
 			if err := ed.run(); err != test.err {
 				if xerr, ok := err.(*exec.ExitError); ok {
 					if _, ok := test.err.(*exec.ExitError); ok {
-						// TODO: compare the actual exit error
+						// TODO(thimc): compare the actual exit error
 						_ = xerr
 					}
 				} else if synerr, ok := err.(*syntax.Error); ok {
-					// TODO: verify the regexp.syntax.Error
+					// TODO(thimc): verify the regexp.syntax.Error
 					_ = synerr
 				} else {
 					t.Fatalf("want %+v, got %+v", test.err, err)

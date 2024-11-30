@@ -83,7 +83,7 @@ type Editor struct {
 	silent  bool           // suppress diagnostics
 	script  bool           // stdin is a file
 	lc      int            // line count (script mode)
-	binary  bool           // TODO: binary mode
+	binary  bool           // TODO(thimc): implement "binary mode" which replaces every NULL character with a newline. When this mode is enabled ed should not append a newline on reading/writing.
 	sigch   chan os.Signal // signal handlers
 
 	cs suffix // command suffix
@@ -138,6 +138,7 @@ func NewEditor(opts ...Option) *Editor {
 		stdout: os.Stdout,
 		stderr: os.Stderr,
 		sigch:  make(chan os.Signal, 1),
+		lc:     1,
 	}
 	if fi, err := os.Stdin.Stat(); err == nil {
 		ed.script = fi.Mode()&os.ModeCharDevice == 0
@@ -185,9 +186,7 @@ func (ed *Editor) errorln(verbose bool, err error) {
 		return
 	}
 	ed.err = err
-	if ed.silent {
-		return
-	} else if verbose {
+	if verbose {
 		if ed.script {
 			fmt.Fprintf(ed.stderr, "script, line: %d: %s\n", ed.lc, ed.err)
 			os.Exit(2)
@@ -207,6 +206,9 @@ func (ed *Editor) run() error {
 		}
 		WithStdin(ed.stdin)(ed)
 		ed.doInput("q")
+	}
+	if ed.script {
+		ed.lc++
 	}
 	if err := ed.parse(); err != nil {
 		return err
@@ -276,6 +278,7 @@ func (ed *Editor) read(path string) error {
 			lines: append(ed.file.lines[:n], append(lines, ed.file.lines[n:]...)...),
 			path:  path,
 		}
+		ed.undo.reset()
 	}
 	size := len(lines)
 	for _, ln := range lines {
@@ -328,19 +331,21 @@ func (ed *Editor) append(dot int) error {
 		}
 		ed.file.append(dot, []string{ln})
 		dot++
-		ed.undo.push(undoDelete, ed.first, ed.first, dot, ed.file.lines[dot-1:dot])
+		ed.undo.append(undoTypeDelete, ed.first, ed.first, dot, ed.file.lines[dot-1:dot])
 		ed.dot = dot
 		ed.dirty = true
 		if ed.script {
 			ed.lc++
 		}
 	}
-	ed.doInput("")
-	ed.undo.store()
+	ed.undo.store(ed.g)
 	return nil
 }
 
 func (ed *Editor) delete(start, end int) {
+	lines := make([]string, end-start+1)
+	copy(lines, ed.file.lines[start-1:end])
+	ed.undo.append(undoTypeAdd, start, end, ed.dot, lines)
 	ed.file.delete(start, end)
 	ed.dot = start - 1
 	ed.dirty = true
@@ -557,8 +562,10 @@ func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int) error {
 				j += w
 				sb.WriteRune(r)
 			}
-			// TODO: handle embedded newlines in the replacement string.
+			// TODO(thimc): Handle embedded newlines in the replacement string.
 			sb.WriteString(ed.file.lines[i][end:])
+			ed.undo.append(undoTypeAdd, i+1, i+1, ed.dot, []string{ed.file.lines[i]})
+			ed.undo.append(undoTypeDelete, i+1, i+1, ed.dot, []string{sb.String()})
 			ed.file.lines[i] = sb.String()
 			ed.dirty = true
 			ed.dot = i + 1
@@ -570,5 +577,6 @@ func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int) error {
 	if subs == 0 && !ed.g {
 		return ErrNoMatch
 	}
+	ed.undo.store(ed.g)
 	return ed.display(ed.dot, ed.dot, ed.cs)
 }
