@@ -521,11 +521,14 @@ func cmdWrite(ed *Editor) error {
 	r := ed.token()
 	ed.consume()
 	quit := ed.token()
-	path := ""
-	if !unicode.IsSpace(quit) && quit != 'Q' && quit != 'q' && quit != EOF {
+	if quit == 'q' || quit == 'Q' {
+		ed.consume()
+	}
+	if !unicode.IsSpace(ed.token()) && ed.token() != EOF {
 		return ErrUnexpectedCmdSuffix
 	}
 	ed.skipWhitespace()
+	path := ""
 	if ed.token() != EOF && ed.token() != '\n' {
 		path = ed.scanString()
 	}
