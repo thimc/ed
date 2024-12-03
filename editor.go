@@ -59,6 +59,7 @@ const (
 )
 
 const DefaultShell = "/bin/sh"
+const DefaultHangupFile = "ed.hup"
 const DefaultPrompt = "*"
 
 type Editor struct {

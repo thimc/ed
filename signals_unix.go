@@ -17,9 +17,9 @@ func (ed *Editor) handleSignals() {
 			fmt.Fprintf(ed.stdout, "\n%s\n", ErrDefault)
 			// TODO(thimc): SIGINT: Return to command mode on interrupt.
 		case syscall.SIGHUP:
-			// TODO(thimc): SIGHUP: If the current buffer has changed since it was last written, ed
-			// attempts to write the buffer to the file ed.hup.  Nothing is
-			// written to the currently remembered file, and ed exits.
+			if ed.file.dirty && len(ed.file.lines) > 0 {
+				ed.write(DefaultHangupFile, 'w', 0, 1, len(ed.file.lines))
+			}
 		case syscall.SIGQUIT:
 			// ignore
 		}
