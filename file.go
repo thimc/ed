@@ -59,7 +59,13 @@ func (f *file) write(path string, r rune, start, end int) (int, error) {
 	if err != nil {
 		return -1, ErrCannotOpenFile
 	}
-	size, err := file.WriteString(strings.Join(f.lines[start-1:end], "\n") + "\n")
+	start -= 1
+	if start < 0 {
+		start = 0
+	}
+	// TODO(thimc): If a text (non-binary) file is not terminated
+	// by a newline character, then ed appends one on reading/writing it.
+	size, err := file.WriteString(strings.Join(f.lines[start:end], "\n") + "\n")
 	if err != nil {
 		return -1, ErrCannotWriteFile
 	}
