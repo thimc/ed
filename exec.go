@@ -542,7 +542,20 @@ func cmdWrite(ed *Editor) error {
 	if err := ed.getSuffix(); err != nil {
 		return err
 	}
-	return ed.write(path, r, quit, ed.first, ed.second)
+	siz, err := ed.file.write(path, r, ed.first, ed.second)
+	if err != nil {
+		return err
+	}
+	if !ed.silent {
+		fmt.Fprintln(ed.stdout, siz)
+	}
+	if quit == 'Q' {
+		os.Exit(0)
+	} else if quit == 'q' && ed.dirty {
+		ed.dirty = false
+		return ErrFileModified
+	}
+	return nil
 }
 
 func cmdScroll(ed *Editor) error {

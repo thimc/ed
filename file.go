@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 )
 
@@ -47,4 +48,23 @@ func (f *file) move(start, end, dest int) int {
 	}
 	f.lines = append(f.lines[:dest], append(buf, f.lines[dest:]...)...)
 	return dest + (end - start + 1)
+}
+
+func (f *file) write(path string, r rune, start, end int) (int, error) {
+	perms := os.O_CREATE | os.O_RDWR | os.O_TRUNC
+	if r == 'W' {
+		perms = perms&^os.O_TRUNC | os.O_APPEND
+	}
+	file, err := os.OpenFile(path, perms, 0666)
+	if err != nil {
+		return -1, ErrCannotOpenFile
+	}
+	size, err := file.WriteString(strings.Join(f.lines[start-1:end], "\n") + "\n")
+	if err != nil {
+		return -1, ErrCannotWriteFile
+	}
+	if err := file.Close(); err != nil {
+		return -1, ErrCannotCloseFile
+	}
+	return size, nil
 }

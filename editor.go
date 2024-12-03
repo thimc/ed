@@ -295,35 +295,6 @@ func (ed *Editor) read(path string) error {
 	return nil
 }
 
-func (ed *Editor) write(path string, r, quit rune, start, end int) error {
-	perms := os.O_CREATE | os.O_RDWR | os.O_TRUNC
-	if r == 'W' {
-		perms = perms&^os.O_TRUNC | os.O_APPEND
-	}
-	f, err := os.OpenFile(path, perms, 0666)
-	if err != nil {
-		return ErrCannotOpenFile
-	}
-	size, err := f.WriteString(strings.Join(ed.file.lines[start-1:end], "\n") + "\n")
-	if err != nil {
-		return ErrCannotWriteFile
-	}
-	if err := f.Close(); err != nil {
-		return ErrCannotCloseFile
-	}
-	if !ed.silent {
-		fmt.Fprintln(ed.stdout, size)
-	}
-	if quit == 'Q' {
-		os.Exit(0)
-	} else if quit == 'q' && ed.dirty {
-		ed.dirty = false
-		return ErrFileModified
-	}
-	ed.dirty = false
-	return nil
-}
-
 func (ed *Editor) append(dot int) error {
 	for ed.Scan() {
 		ln := ed.scanString()

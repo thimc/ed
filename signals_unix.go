@@ -18,7 +18,7 @@ func (ed *Editor) handleSignals() {
 			// TODO(thimc): SIGINT: Return to command mode on interrupt.
 		case syscall.SIGHUP:
 			if ed.file.dirty && len(ed.file.lines) > 0 {
-				ed.write(DefaultHangupFile, 'w', 0, 1, len(ed.file.lines))
+				ed.file.write(DefaultHangupFile, 'w', 1, len(ed.file.lines))
 			}
 		case syscall.SIGQUIT:
 			// ignore
