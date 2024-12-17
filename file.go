@@ -61,7 +61,7 @@ func (f *file) write(path string, r rune, start, end int) (int, error) {
 	}
 	start = max(start-1, 0)
 	lastline := ""
-	if len(f.lines) > 0 && f.lines[end] != "" {
+	if len(f.lines) > 0 && f.lines[end-1] != "" {
 		lastline = "\n"
 	}
 	size, err := file.WriteString(strings.Join(f.lines[start:end], "\n") + lastline)
