@@ -1,5 +1,8 @@
 # ed
 
+*Note: Ed is currently in the process of major refactoring and
+rewriting parts of the editor, see the `new` branch.*
+
 Go clone of [ed(1)](https://man.openbsd.org/ed.1), the famous
 line-oriented text editor that is originally from the 1970s. Simply
 put, _the UNIX text editor_.
