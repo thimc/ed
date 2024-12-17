@@ -90,6 +90,8 @@ func TestEditor(t *testing.T) {
 		{cmd: "g/.*/p", cur: cursor{first: lc, second: lc, dot: lc}, output: strings.Join(dummy.lines, "\n") + "\n"},
 		{cmd: "v/A/p", cur: cursor{first: lc, second: lc, dot: lc}, output: strings.Join(dummy.lines[1:], "\n") + "\n"},
 		{cmd: "G/A.*/npl\np\np", cur: cursor{first: 2, second: 2, dot: 2}, output: "1\tA A A A A$\nA A A A A\n2\tA A A A A$\nA A A A A\n", sub: true},
+		{cmd: "G/.*/\nn\n&\n&\n&\n&\n&\n&\n&\n", cur: cursor{first: slc, second: slc, dot: slc}, output: "A A A A A\n1\tA A A A A\nA A A A A\n2\tA A A A A\nB B B B B\n3\tB B B B B\nB B B B B\n4\tB B B B B\nC C C C C\n5\tC C C C C\nC C C C C\n6\tC C C C C\nD D D D D\n7\tD D D D D\nD D D D D\n8\tD D D D D\n", sub: true},
+		{cmd: "V/A/\nn\n&\n&\n&\n&\n&\n&\n&\n", cur: cursor{first: slc, second: slc, dot: slc}, output: "B B B B B\n3\tB B B B B\nB B B B B\n4\tB B B B B\nC C C C C\n5\tC C C C C\nC C C C C\n6\tC C C C C\nD D D D D\n7\tD D D D D\nD D D D D\n8\tD D D D D\n", sub: true},
 
 		// h / H - error message
 		{cmd: "h", cur: cursor{first: lc, second: lc, dot: lc}},
@@ -193,9 +195,12 @@ func TestEditor(t *testing.T) {
 		// v / V / g / G - global
 		{cmd: ",d", cur: cursor{first: 1, second: lc, dot: 0, addrc: 2}},
 		{cmd: "g/./p", cur: cursor{first: 1, second: 0, dot: 0}, keep: true, err: ErrInvalidAddress},
-		{cmd: "G/A.*/\n&", cur: cursor{first: 1, second: lc, dot: 1}, err: ErrNoPreviousCmd},
+		{cmd: "G/A.*/\n&", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n", err: ErrNoPreviousCmd},
 		{cmd: "g/.*/g/.*/p", cur: cursor{first: 1, second: 1, dot: 1}, err: ErrCannotNestGlobal},
 		{cmd: "2,5g A p", cur: cursor{first: 2, second: 5, dot: lc, addrc: 2}, err: ErrInvalidPatternDelim},
+		{cmd: "G/.*/\n,d", cur: cursor{first: 1, second: 26, dot: -24, addrc: 2}, output: "A\n", err: ErrInvalidAddress},
+		{cmd: "g/A/\\", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrUnexpectedEOF},
+		{cmd: "G/ABC/\n\\", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrUnknownCmd},
 
 		// H - toggle errors
 		{cmd: "1h", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},

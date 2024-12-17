@@ -423,8 +423,8 @@ func (ed *Editor) buildList(r rune) error {
 		return ErrInvalidPatternDelim
 	}
 	ed.consume()
-	search, eof := ed.scanStringUntil(delim)
-	if !eof && ed.token() == delim {
+	search, _ := ed.scanStringUntil(delim)
+	if ed.token() == delim {
 		ed.consume()
 	}
 	var (
@@ -471,7 +471,7 @@ func (ed *Editor) cmdList() (string, error) {
 			}
 			ln = ed.input.buf
 		}
-		if strings.HasSuffix(ln, "\\") {
+		if strings.Contains(ln, "\\") {
 			ln = strings.TrimSuffix(ln, "\\")
 			done = false
 			ed.consume()

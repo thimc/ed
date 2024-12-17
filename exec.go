@@ -172,6 +172,9 @@ func cmdGlobal(ed *Editor) error {
 	for _, i := range ed.list {
 		ed.dot = i - (nl - len(ed.file.lines))
 		if interactive {
+			if gs == 0 {
+				gs |= suffixPrint
+			}
 			if err := ed.display(ed.dot, ed.dot, gs); err != nil {
 				return err
 			}
@@ -197,6 +200,9 @@ func cmdGlobal(ed *Editor) error {
 		}
 		if err := ed.display(ed.dot, ed.dot, ed.cs); err != nil {
 			return err
+		}
+		if interactive {
+			ed.gcmd = cmdlist
 		}
 	}
 	ed.cs = 0
