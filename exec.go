@@ -120,7 +120,7 @@ func cmdFilename(ed *Editor) error {
 	if ed.addrc > 0 {
 		return ErrUnexpectedAddress
 	}
-	if !unicode.IsSpace(ed.token()) && ed.token() != EOF {
+	if !unicode.IsSpace(ed.token()) && !ed.input.eof() {
 		return ErrUnexpectedCmdSuffix
 	}
 	ed.skipWhitespace()
@@ -610,7 +610,7 @@ func cmdShell(ed *Editor) error {
 	if ed.addrc > 0 {
 		return ErrUnexpectedAddress
 	}
-	if ed.token() == EOF || ed.token() == '\n' {
+	if ed.input.eof() || ed.token() == '\n' {
 		return ErrNoCmd
 	}
 	ed.skipWhitespace()

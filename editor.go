@@ -71,7 +71,6 @@ type Editor struct {
 	re      *regexp.Regexp // previous regex
 	replace string         // previous replacement text
 	scroll  int            // previous scroll value
-	shcmd   string         // previous shell command
 	err     error          // previous error
 	gcmd    string         // previous global command
 
@@ -260,6 +259,9 @@ func (ed *Editor) read(path string) error {
 		return err
 	}
 	if r, _ := utf8.DecodeRuneInString(path); r == '!' {
+		if path[1:] == "" {
+			return ErrNoCmd
+		}
 		lines, err = ed.shell(path[1:])
 		if err != nil {
 			return err
@@ -349,12 +351,6 @@ func (ed *Editor) display(start, end int, flags suffix) error {
 }
 
 func (ed *Editor) shell(args string) ([]string, error) {
-	if args = strings.TrimPrefix(args, "!"); args == "" {
-		if ed.shcmd == "" {
-			return nil, ErrNoPreviousCmd
-		}
-		args = ed.shcmd
-	}
 	var sb strings.Builder
 	count := utf8.RuneCountInString(args)
 	for i := 0; i < count; {
@@ -385,7 +381,6 @@ func (ed *Editor) shell(args string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	ed.shcmd = sb.String()
 	return strings.Split(strings.TrimRight(string(output), "\n"), "\n"), err
 }
 

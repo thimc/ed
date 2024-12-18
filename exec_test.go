@@ -204,8 +204,9 @@ func TestEditor(t *testing.T) {
 		{cmd: "G/.*/\n\\", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n", err: ErrUnexpectedEOF},
 		{cmd: "G/.*", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n", err: ErrUnexpectedEOF},
 		{cmd: "G/.*\n\n", cur: cursor{first: 1, second: lc, dot: 2}, output: "A\nB\n", err: ErrUnexpectedEOF},
-
-		//{cmd: "G/ABC/\n\\", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrUnknownCmd},
+		{cmd: "g/\n", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrNoPrevPattern},
+		{cmd: "g/(abc/", cur: cursor{first: 1, second: lc, dot: lc}, err: &syntax.Error{Code: syntax.ErrorCode("missing closing )"), Expr: "(abc"}},
+		{cmd: "Gz", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrNoPrevPattern},
 
 		// H - toggle errors
 		{cmd: "1h", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
@@ -250,6 +251,8 @@ func TestEditor(t *testing.T) {
 		{cmd: "rq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnexpectedCmdSuffix},
 		{cmd: "r non-existing-file", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrCannotReadFile},
 		{cmd: "r", cur: cursor{first: lc, second: lc, dot: lc}, path: true, err: ErrNoFileName},
+		{cmd: "r !non-existing-binary", cur: cursor{first: lc, second: lc, dot: lc}, err: &exec.Error{}},
+		{cmd: "r !", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrNoCmd},
 		// TODO(thimc): unsuccesful r (read) test with a command suffix. NOTE: I don't even know how to test this.
 
 		// s - substitute
