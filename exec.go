@@ -142,18 +142,19 @@ func cmdGlobal(ed *Editor) error {
 	var err error
 	r := ed.token()
 	ed.consume()
+	var (
+		interactive = (r == 'G' || r == 'V')
+		g           = (r == 'g' || r == 'G')
+		cmdlist     string
+	)
 	if ed.g {
 		return ErrCannotNestGlobal
 	} else if err := ed.validate(1, len(ed.file.lines)); err != nil {
 		return err
-	} else if err := ed.buildList(r); err != nil {
+	} else if err := ed.buildList(g, interactive); err != nil {
 		return err
 	}
 	ed.g = true
-	var (
-		interactive = (r == 'G' || r == 'V')
-		cmdlist     string
-	)
 	if !interactive {
 		cmdlist, err = ed.cmdList()
 		if err != nil {
@@ -177,6 +178,9 @@ func cmdGlobal(ed *Editor) error {
 			}
 			if err := ed.display(ed.dot, ed.dot, gs); err != nil {
 				return err
+			}
+			if !ed.input.Scan() {
+				return ErrUnexpectedEOF
 			}
 			cmdlist, err = ed.cmdList()
 			if err != nil {
@@ -230,13 +234,10 @@ func cmdHelp(ed *Editor) error {
 
 func cmdInsert(ed *Editor) error {
 	ed.consume()
-	if ed.second == 0 {
-		ed.second = 1
-	}
 	if err := ed.getSuffix(); err != nil {
 		return err
 	}
-	return ed.append(ed.second - 1)
+	return ed.append(max(ed.second-1, 1))
 }
 
 func cmdJoin(ed *Editor) error {

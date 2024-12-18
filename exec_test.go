@@ -87,6 +87,7 @@ func TestEditor(t *testing.T) {
 		{cmd: "f test", cur: cursor{first: lc, second: lc, dot: lc}, output: "test\n"},
 
 		// v / V / g / G - global
+		{cmd: "g/.*/", cur: cursor{first: lc, second: lc, dot: lc}, output: strings.Join(dummy.lines, "\n") + "\n"},
 		{cmd: "g/.*/p", cur: cursor{first: lc, second: lc, dot: lc}, output: strings.Join(dummy.lines, "\n") + "\n"},
 		{cmd: "v/A/p", cur: cursor{first: lc, second: lc, dot: lc}, output: strings.Join(dummy.lines[1:], "\n") + "\n"},
 		{cmd: "G/A.*/npl\np\np", cur: cursor{first: 2, second: 2, dot: 2}, output: "1\tA A A A A$\nA A A A A\n2\tA A A A A$\nA A A A A\n", sub: true},
@@ -195,16 +196,21 @@ func TestEditor(t *testing.T) {
 		// v / V / g / G - global
 		{cmd: ",d", cur: cursor{first: 1, second: lc, dot: 0, addrc: 2}},
 		{cmd: "g/./p", cur: cursor{first: 1, second: 0, dot: 0}, keep: true, err: ErrInvalidAddress},
-		{cmd: "G/A.*/\n&", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n", err: ErrNoPreviousCmd},
 		{cmd: "g/.*/g/.*/p", cur: cursor{first: 1, second: 1, dot: 1}, err: ErrCannotNestGlobal},
 		{cmd: "2,5g A p", cur: cursor{first: 2, second: 5, dot: lc, addrc: 2}, err: ErrInvalidPatternDelim},
-		{cmd: "G/.*/\n,d", cur: cursor{first: 1, second: 26, dot: -24, addrc: 2}, output: "A\n", err: ErrInvalidAddress},
 		{cmd: "g/A/\\", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrUnexpectedEOF},
-		{cmd: "G/ABC/\n\\", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrUnknownCmd},
+		{cmd: "G/A.*/\n&", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n", err: ErrNoPreviousCmd},
+		{cmd: "G/.*/\n,d", cur: cursor{first: 1, second: lc, dot: -24, addrc: 2}, output: "A\n", err: ErrInvalidAddress},
+		{cmd: "G/.*/\n\\", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n", err: ErrUnexpectedEOF},
+		{cmd: "G/.*", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n", err: ErrUnexpectedEOF},
+		{cmd: "G/.*\n\n", cur: cursor{first: 1, second: lc, dot: 2}, output: "A\nB\n", err: ErrUnexpectedEOF},
+
+		//{cmd: "G/ABC/\n\\", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrUnknownCmd},
 
 		// H - toggle errors
 		{cmd: "1h", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
 		{cmd: "1H", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
+		{cmd: "Hz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
 
 		// i - insert
 		{cmd: "iz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},

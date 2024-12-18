@@ -414,11 +414,8 @@ func (ed *Editor) getSuffix() error {
 	return nil
 }
 
-func (ed *Editor) buildList(r rune) error {
-	var (
-		g     = r == 'g' || r == 'G'
-		delim = ed.token()
-	)
+func (ed *Editor) buildList(g, interactive bool) error {
+	delim := ed.token()
 	if delim == ' ' || delim == '\n' || delim == EOF {
 		return ErrInvalidPatternDelim
 	}
@@ -442,7 +439,7 @@ func (ed *Editor) buildList(r rune) error {
 			return err
 		}
 	}
-	if r == 'G' || r == 'V' {
+	if interactive {
 		if err := ed.getSuffix(); err != nil {
 			return err
 		}
@@ -461,26 +458,24 @@ func (ed *Editor) cmdList() (string, error) {
 	var (
 		sb   strings.Builder
 		done bool
+		ln   string
 	)
+	if ed.token() != EOF {
+		ln = ed.scanString()
+	}
 	for {
 		done = true
-		ln := ed.scanString()
-		if ln == "" {
-			if !ed.input.Scan() {
-				return "", ErrUnexpectedEOF
-			}
-			ln = ed.input.buf
-		}
-		if strings.Contains(ln, "\\") {
+		if strings.HasSuffix(ln, "\\") {
 			ln = strings.TrimSuffix(ln, "\\")
 			done = false
 			ed.consume()
 		}
 		sb.WriteString(ln)
 		if !done {
-			if ed.token() == EOF {
+			if !ed.input.Scan() {
 				return "", ErrUnexpectedEOF
 			}
+			ln = ed.input.buf
 			continue
 		}
 		break
