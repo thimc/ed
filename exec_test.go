@@ -164,6 +164,8 @@ func TestEditor(t *testing.T) {
 
 		// ! - shell escape
 		{cmd: "!echo hi", cur: cursor{first: lc, second: lc, dot: lc}, output: "hi\n!\n"},
+		{cmd: "!echo \\%", cur: cursor{first: lc, second: lc, dot: lc}, output: "%\n!\n"},
+		{cmd: "!echo %", cur: cursor{first: lc, second: lc, dot: lc}, output: fmt.Sprintf("%s\n!\n", dummy.path)},
 
 		// ================================================================
 
@@ -295,6 +297,7 @@ func TestEditor(t *testing.T) {
 		{cmd: "!", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrNoCmd},
 		{cmd: "5!", cur: cursor{first: 5, second: 5, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
 		{cmd: "!nonexistingcommnad", cur: cursor{first: lc, second: lc, dot: lc}, err: &exec.ExitError{}},
+		{cmd: "!echo %", cur: cursor{first: lc, second: lc, dot: lc}, path: true, err: ErrNoFileName},
 
 		// no/unknown command
 		{cmd: "\n", cur: cursor{first: 1, second: lc + 1, dot: lc}, err: ErrInvalidAddress},
