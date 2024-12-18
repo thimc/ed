@@ -565,6 +565,7 @@ func cmdWrite(ed *Editor) error {
 		ed.dirty = false
 		return ErrFileModified
 	}
+	ed.dirty = false
 	return nil
 }
 
