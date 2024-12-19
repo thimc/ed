@@ -225,6 +225,11 @@ func cmdHelp(ed *Editor) error {
 	if r == 'H' {
 		ed.consume()
 		ed.verbose = !ed.verbose
+		if ed.verbose {
+			ed.input.insert('h')
+		} else {
+			ed.input.insert(r)
+		}
 	}
 	if r == 'h' {
 		ed.input.insert(r)

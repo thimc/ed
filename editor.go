@@ -178,7 +178,9 @@ func (ed *Editor) doPrompt() {
 }
 
 func (ed *Editor) errorln(verbose bool, err error) {
-	if ed.token() == 'h' {
+	if ed.token() == 'H' {
+		return
+	} else if ed.token() == 'h' {
 		ed.consume()
 		if ed.err != nil {
 			fmt.Fprintln(ed.stderr, ed.err)
