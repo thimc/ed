@@ -228,10 +228,15 @@ func TestEditor(t *testing.T) {
 		// TODO(thimc): k test when the file buffer is empty
 
 		// l, n, p - print
+		{cmd: ",d", cur: cursor{first: 1, second: lc, addrc: 2}},
+		{cmd: "p", keep: true, err: ErrInvalidAddress},
 		{cmd: "pz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
 		// TODO(thimc): print test when the file buffer is empty
 
 		// m - move
+		{cmd: ",d", cur: cursor{first: 1, second: lc, addrc: 2}},
+		{cmd: "m5", keep: true, err: ErrInvalidAddress},
+		{cmd: "m1z", cur: cursor{first: lc, second: lc, dot: lc, addrc: 1}, err: ErrInvalidCmdSuffix},
 		{cmd: "1,5mz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrDestinationExpected},
 		{cmd: "m", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrDestinationExpected},
 		{cmd: "1,5m2", cur: cursor{first: 1, second: 5, dot: lc, addrc: 1}, err: ErrInvalidDestination},

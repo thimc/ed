@@ -209,9 +209,9 @@ func (ed *Editor) scanString() string {
 
 func (ed *Editor) scanStringUntil(delim rune) (str string, eof bool) {
 	var sb strings.Builder
-	for ed.token() != EOF && ed.token() != delim {
+	for !ed.input.eof() && ed.token() != delim {
 		sb.WriteRune(ed.token())
 		ed.consume()
 	}
-	return sb.String(), ed.token() == EOF
+	return sb.String(), ed.input.eof()
 }

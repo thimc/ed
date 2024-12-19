@@ -403,7 +403,7 @@ func (ed *Editor) getSuffix() error {
 			ok = true
 		}
 	}
-	if r != EOF && r != '\n' {
+	if !ed.input.eof() && r != '\n' {
 		return ErrInvalidCmdSuffix
 	}
 	return nil
@@ -411,7 +411,7 @@ func (ed *Editor) getSuffix() error {
 
 func (ed *Editor) buildList(g, interactive bool) error {
 	delim := ed.token()
-	if delim == ' ' || delim == '\n' || delim == EOF {
+	if delim == ' ' || delim == '\n' || ed.input.eof() {
 		return ErrInvalidPatternDelim
 	}
 	ed.consume()
@@ -455,7 +455,7 @@ func (ed *Editor) cmdList() (string, error) {
 		done bool
 		ln   string
 	)
-	if ed.token() != EOF {
+	if !ed.input.eof() {
 		ln = ed.scanString()
 	}
 	for {

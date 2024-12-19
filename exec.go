@@ -357,15 +357,13 @@ func cmdQuit(ed *Editor) error {
 
 func cmdRead(ed *Editor) error {
 	ed.consume()
-	if !unicode.IsSpace(ed.token()) && ed.token() != EOF {
+	if !unicode.IsSpace(ed.token()) && !ed.input.eof() {
 		return ErrUnexpectedCmdSuffix
 	} else if ed.addrc == 0 {
 		ed.second = len(ed.file.lines)
 	}
 	ed.skipWhitespace()
-	path := ed.scanString()
-	var err error
-	path, err = ed.validatePath(path)
+	path, err := ed.validatePath(ed.scanString())
 	if err != nil {
 		return err
 	}
@@ -388,32 +386,31 @@ func cmdSubstitute(ed *Editor) error {
 	for {
 		r := ed.token()
 		switch {
-		case r == '\n', r == EOF: // repeat last substitution
+		case r == '\n', ed.input.eof():
 			sflags |= subRepeatLast
 			ed.consume()
-		case r == 'g': // replace all occurences
+		case r == 'g':
 			sflags |= subComplementGlobal
 			ed.consume()
-		case r == 'p': // print
+		case r == 'p':
 			sflags |= subComplementPrint
 			ed.consume()
-		case r == 'r': // use last regex
+		case r == 'r':
 			sflags |= subLastRegex
 			ed.consume()
-		case unicode.IsDigit(r): // replace nth
+		case unicode.IsDigit(r):
 			nth, err = strconv.Atoi(string(r))
 			if err != nil {
 				return err
 			}
 			sflags |= subRepeatLast
 			ed.consume()
-			// override global substitution
 		default:
 			if sflags > 0 {
 				return ErrInvalidCmdSuffix
 			}
 		}
-		if sflags < 1 || r == '\n' || r == EOF {
+		if sflags < 1 || r == '\n' || ed.input.eof() {
 			break
 		}
 	}
@@ -531,12 +528,12 @@ func cmdWrite(ed *Editor) error {
 	if quit == 'q' || quit == 'Q' {
 		ed.consume()
 	}
-	if !unicode.IsSpace(ed.token()) && ed.token() != EOF {
+	if !unicode.IsSpace(ed.token()) && !ed.input.eof() {
 		return ErrUnexpectedCmdSuffix
 	}
 	ed.skipWhitespace()
 	path := ""
-	if ed.token() != EOF && ed.token() != '\n' {
+	if !ed.input.eof() && ed.token() != '\n' {
 		path = ed.scanString()
 	}
 	var err error
