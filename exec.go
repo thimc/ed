@@ -222,8 +222,8 @@ func cmdHelp(ed *Editor) error {
 	if err := ed.getSuffix(); err != nil {
 		return err
 	}
+	ed.consume()
 	if r == 'H' {
-		ed.consume()
 		ed.verbose = !ed.verbose
 		if ed.verbose {
 			ed.input.insert('h')
