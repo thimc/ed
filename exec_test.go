@@ -152,6 +152,8 @@ func TestEditor(t *testing.T) {
 		// u - undo
 
 		// w / wq / W - write
+		{cmd: ",d", cur: cursor{first: 1, second: lc, addrc: 2}},
+		{cmd: "w", output: "0\n", keep: true},
 		{cmd: "1w", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, output: "2\n"},
 		{cmd: "w", cur: cursor{first: 1, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", lc*2)},
 		{cmd: fmt.Sprintf("w %s", tmp.Name()), cur: cursor{first: 1, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", lc*2)},
@@ -300,6 +302,11 @@ func TestEditor(t *testing.T) {
 		{cmd: "wq", cur: cursor{first: slc, second: slc, dot: slc}, sub: true, err: ErrNoFileName, output: defaultErr},
 		{cmd: "Wq", cur: cursor{first: slc, second: slc, dot: slc}, sub: true, err: ErrNoFileName, output: defaultErr},
 		{cmd: "W", cur: cursor{first: slc, second: slc, dot: slc}, sub: true, err: ErrNoFileName, output: defaultErr},
+		{cmd: "99,100w", cur: cursor{first: lc, second: lc, dot: lc, addrc: 1}, output: defaultErr, err: ErrInvalidAddress},
+		{cmd: "w /root/no-access", cur: cursor{first: 1, second: lc, dot: lc}, output: defaultErr, err: ErrCannotOpenFile},
+		{cmd: "1d", cur: cursor{first: 1, second: 1, dot: 1, addrc: 1}},
+		{cmd: "Wq", cur: cursor{first: 1, second: lc - 1, dot: 1}, sub: true, err: ErrFileModified, keep: true, output: "50\n" + defaultErr},
+		{cmd: fmt.Sprintf("WQ %s", tmp.Name()), cur: cursor{first: 1, second: lc, dot: lc}, output: "52\n"},
 
 		// z - scroll
 		{cmd: "1z1234567891234567891234567890", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrNumberOutOfRange, output: defaultErr},
@@ -354,7 +361,7 @@ func TestEditor(t *testing.T) {
 					// TODO(thimc): verify the regexp.syntax.Error
 					_ = synerr
 				} else {
-					t.Fatalf("want %+v, got %+v", test.err, err)
+					t.Fatalf("want %q, got %q", test.err, err)
 				}
 			}
 			if err != nil {
