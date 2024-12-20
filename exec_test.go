@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"regexp/syntax"
@@ -59,6 +58,7 @@ func TestEditor(t *testing.T) {
 
 	lc := len(dummy.lines)
 	slc := len(subBuffer.lines)
+	defaultErr := fmt.Sprintf("%s\n", ErrDefault.Error())
 	tests := []struct {
 		cmd    string
 		cur    cursor
@@ -95,12 +95,13 @@ func TestEditor(t *testing.T) {
 		{cmd: "V/A/\nn\n&\n&\n&\n&\n&\n&\n&\n", cur: cursor{first: slc, second: slc, dot: slc}, output: "B B B B B\n3\tB B B B B\nB B B B B\n4\tB B B B B\nC C C C C\n5\tC C C C C\nC C C C C\n6\tC C C C C\nD D D D D\n7\tD D D D D\nD D D D D\n8\tD D D D D\n", sub: true},
 
 		// h / H - error message
-		{cmd: "h", cur: cursor{first: lc, second: lc, dot: lc}},
-		{cmd: "H", cur: cursor{first: lc, second: lc, dot: lc}},
+		{cmd: "h", cur: cursor{first: lc, second: lc, dot: lc}, output: ""},
+		{cmd: "H", cur: cursor{first: lc, second: lc, dot: lc}, output: "", keep: true},
 
 		// i - insert
 		{cmd: "ip\nworld\n.", cur: cursor{first: lc, second: lc, dot: lc}, output: "world\n"},
-		// TODO(thimc): insert test when the file buffer is empty
+		{cmd: ",d", cur: cursor{first: 1, second: lc, addrc: 2}},
+		{cmd: "ip\nhi\n.", cur: cursor{dot: 1}, keep: true, output: "hi\n", buf: []string{"hi"}},
 
 		// j - join
 		{cmd: fmt.Sprintf("%d,%dj", lc-1, lc), cur: cursor{first: lc - 1, second: lc, dot: lc, addrc: 2}},
@@ -121,8 +122,9 @@ func TestEditor(t *testing.T) {
 		{cmd: "P", cur: cursor{first: lc, second: lc, dot: lc}},
 
 		// q - quit
-		{cmd: "1,2d\nq", cur: cursor{first: 1, second: 2, dot: 1, addrc: 2}, keep: true},
-		// TODO(thimc): succesful quit test
+		{cmd: "q", cur: cursor{first: 1, second: 2, dot: 1, addrc: 2}},
+		{cmd: "1,2d", cur: cursor{first: 1, second: 2, dot: 1, addrc: 2}},
+		{cmd: "Q", cur: cursor{first: 1, second: 2, dot: 1, addrc: 2}, keep: true},
 
 		// r - read
 		{cmd: "r", cur: cursor{first: lc, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", lc*2)},
@@ -170,150 +172,159 @@ func TestEditor(t *testing.T) {
 		// ================================================================
 
 		// a - append
-		{cmd: "az", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
+		{cmd: "az", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
 
 		// c - change
-		{cmd: "cz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
+		{cmd: "cz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
 		{cmd: ",d", cur: cursor{first: 1, second: lc, dot: 0, addrc: 2}, err: nil},
-		{cmd: "c", keep: true, err: ErrInvalidAddress},
+		{cmd: "c", keep: true, err: ErrInvalidAddress, output: defaultErr},
 
 		// d - delete
-		{cmd: "d", keep: true, err: ErrInvalidAddress},
-		{cmd: "dz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
-		{cmd: fmt.Sprintf("1,%dd", lc+1), cur: cursor{first: 1, second: 1, dot: lc, addrc: 2}, err: ErrInvalidAddress},
+		{cmd: "d", keep: true, err: ErrInvalidAddress, output: defaultErr},
+		{cmd: "dz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
+		{cmd: fmt.Sprintf("1,%dd", lc+1), cur: cursor{first: 1, second: 1, dot: lc, addrc: 2}, err: ErrInvalidAddress, output: defaultErr},
 
 		// e - open file
-		{cmd: "1e", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
-		{cmd: "ez", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnexpectedCmdSuffix},
+		{cmd: "1e", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress, output: defaultErr},
+		{cmd: "ez", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnexpectedCmdSuffix, output: defaultErr},
 		{cmd: "1d", cur: cursor{first: 1, second: 1, dot: 1, addrc: 1}},
-		{cmd: "e", cur: cursor{first: 1, second: 1, dot: 1}, err: ErrFileModified, keep: true},
-		{cmd: "e -non-existing-file-name-", cur: cursor{first: lc, second: lc}, err: ErrCannotReadFile},
+		{cmd: "e", cur: cursor{first: 1, second: 1, dot: 1}, err: ErrFileModified, keep: true, output: defaultErr},
+		{cmd: "e -non-existing-file-name-", cur: cursor{first: lc, second: lc}, err: ErrCannotReadFile, output: defaultErr},
 
 		// f - filename
-		{cmd: "fz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnexpectedCmdSuffix},
-		{cmd: "1f", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
-		{cmd: "f !", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidRedirection},
-		{cmd: "f", cur: cursor{first: lc, second: lc, dot: lc}, path: true, err: ErrNoFileName},
+		{cmd: "fz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnexpectedCmdSuffix, output: defaultErr},
+		{cmd: "1f", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress, output: defaultErr},
+		{cmd: "f !", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidRedirection, output: defaultErr},
+		{cmd: "f", cur: cursor{first: lc, second: lc, dot: lc}, path: true, err: ErrNoFileName, output: defaultErr},
 
 		// v / V / g / G - global
 		{cmd: ",d", cur: cursor{first: 1, second: lc, dot: 0, addrc: 2}},
-		{cmd: "g/./p", cur: cursor{first: 1, second: 0, dot: 0}, keep: true, err: ErrInvalidAddress},
-		{cmd: "g/.*/g/.*/p", cur: cursor{first: 1, second: 1, dot: 1}, err: ErrCannotNestGlobal},
-		{cmd: "2,5g A p", cur: cursor{first: 2, second: 5, dot: lc, addrc: 2}, err: ErrInvalidPatternDelim},
-		{cmd: "g/A/\\", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrUnexpectedEOF},
-		{cmd: "G/A.*/\n&", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n", err: ErrNoPreviousCmd},
-		{cmd: "G/.*/\n,d", cur: cursor{first: 1, second: lc, dot: -24, addrc: 2}, output: "A\n", err: ErrInvalidAddress},
-		{cmd: "G/.*/\n\\", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n", err: ErrUnexpectedEOF},
-		{cmd: "G/.*", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n", err: ErrUnexpectedEOF},
-		{cmd: "G/.*\n\n", cur: cursor{first: 1, second: lc, dot: 2}, output: "A\nB\n", err: ErrUnexpectedEOF},
-		{cmd: "g/\n", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrNoPrevPattern},
-		{cmd: "g/(abc/", cur: cursor{first: 1, second: lc, dot: lc}, err: &syntax.Error{Code: syntax.ErrorCode("missing closing )"), Expr: "(abc"}},
-		{cmd: "Gz", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrNoPrevPattern},
+		{cmd: "g/./p", cur: cursor{first: 1, second: 0, dot: 0}, keep: true, err: ErrInvalidAddress, output: defaultErr},
+		{cmd: "g/.*/g/.*/p", cur: cursor{first: 1, second: 1, dot: 1}, err: ErrCannotNestGlobal, output: defaultErr},
+		{cmd: "2,5g A p", cur: cursor{first: 2, second: 5, dot: lc, addrc: 2}, err: ErrInvalidPatternDelim, output: defaultErr},
+		{cmd: "g/A/\\", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrUnexpectedEOF, output: defaultErr},
+		{cmd: "G/A.*/\n&", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n" + defaultErr, err: ErrNoPreviousCmd},
+		{cmd: "G/.*/\n,d", cur: cursor{first: 1, second: lc, dot: -24, addrc: 2}, output: "A\n" + defaultErr, err: ErrInvalidAddress},
+		{cmd: "G/.*/\n\\", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n" + defaultErr, err: ErrUnexpectedEOF},
+		{cmd: "G/.*", cur: cursor{first: 1, second: lc, dot: 1}, output: "A\n" + defaultErr, err: ErrUnexpectedEOF},
+		{cmd: "G/.*\n\n", cur: cursor{first: 1, second: lc, dot: 2}, output: "A\nB\n" + defaultErr, err: ErrUnexpectedEOF},
+		{cmd: "g/\n", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrNoPrevPattern, output: defaultErr},
+		{cmd: "g/(abc/", cur: cursor{first: 1, second: lc, dot: lc}, err: &syntax.Error{Code: syntax.ErrorCode("missing closing )"), Expr: "(abc"}, output: defaultErr},
+		{cmd: "Gz", cur: cursor{first: 1, second: lc, dot: lc}, err: ErrNoPrevPattern, output: defaultErr},
 
-		// H - toggle errors
-		{cmd: "1h", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
-		{cmd: "1H", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
-		{cmd: "Hz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
+		// h / H - error message
+		{cmd: "1h", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress, output: defaultErr},
+		{cmd: "1H", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress, output: defaultErr},
+		{cmd: "Hz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
+		{cmd: "1x", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnknownCmd, output: defaultErr},
+		{cmd: "h", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnknownCmd, output: ErrUnknownCmd.Error() + "\n", keep: true},
+
+		// TODO: Fix output
+		// {cmd: "dz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
+		// {cmd: "h", cur: cursor{first: lc, second: lc, dot: lc}, keep: true, output: ErrInvalidCmdSuffix.Error()},
 
 		// i - insert
-		{cmd: "iz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
+		{cmd: "iz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
 
 		// j - join
-		{cmd: "1,2jz", cur: cursor{first: 1, second: 2, dot: lc, addrc: 2}, err: ErrInvalidCmdSuffix},
-		{cmd: "4,2j", cur: cursor{first: 4, second: 2, dot: lc, addrc: 2}, err: ErrInvalidAddress},
+		{cmd: "1,2jz", cur: cursor{first: 1, second: 2, dot: lc, addrc: 2}, err: ErrInvalidCmdSuffix, output: defaultErr},
+		{cmd: "4,2j", cur: cursor{first: 4, second: 2, dot: lc, addrc: 2}, err: ErrInvalidAddress, output: defaultErr},
 
 		// k - mark
-		{cmd: "k!", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidMark},
-		{cmd: "k!z", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
-		// TODO(thimc): k test when the file buffer is empty
+		{cmd: "k!", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidMark, output: defaultErr},
+		{cmd: "k!z", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
+		{cmd: ",d", cur: cursor{first: 1, second: lc, addrc: 2}, buf: []string{}},
+		{cmd: "ka", keep: true, err: ErrInvalidAddress, output: defaultErr},
 
 		// l, n, p - print
 		{cmd: ",d", cur: cursor{first: 1, second: lc, addrc: 2}},
-		{cmd: "p", keep: true, err: ErrInvalidAddress},
-		{cmd: "pz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
-		// TODO(thimc): print test when the file buffer is empty
+		{cmd: "p", keep: true, err: ErrInvalidAddress, output: defaultErr},
+		{cmd: "pz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
+		{cmd: ",d", cur: cursor{first: 1, second: lc, addrc: 2}, buf: []string{}},
+		{cmd: "p", keep: true, err: ErrInvalidAddress, output: defaultErr},
 
 		// m - move
 		{cmd: ",d", cur: cursor{first: 1, second: lc, addrc: 2}},
-		{cmd: "m5", keep: true, err: ErrInvalidAddress},
-		{cmd: "m1z", cur: cursor{first: lc, second: lc, dot: lc, addrc: 1}, err: ErrInvalidCmdSuffix},
-		{cmd: "1,5mz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrDestinationExpected},
-		{cmd: "m", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrDestinationExpected},
-		{cmd: "1,5m2", cur: cursor{first: 1, second: 5, dot: lc, addrc: 1}, err: ErrInvalidDestination},
-		//{cmd: "1,2m1", cur: cursor{first: 1, second: 2, dot: lc, addrc: 2}, err: ErrInvalidDestination},
-		//{cmd: "1m1a", cur: cursor{first: 1, second: 2, dot: 0, addrc: 1}, err: ErrInvalidCmdSuffix},
+		{cmd: "m5", keep: true, err: ErrInvalidAddress, output: defaultErr},
+		{cmd: "m1z", cur: cursor{first: lc, second: lc, dot: lc, addrc: 1}, err: ErrInvalidCmdSuffix, output: defaultErr},
+		{cmd: "1,5mz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrDestinationExpected, output: defaultErr},
+		{cmd: "m", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrDestinationExpected, output: defaultErr},
+		{cmd: "1,5m2", cur: cursor{first: 1, second: 5, dot: lc, addrc: 1}, err: ErrInvalidDestination, output: defaultErr},
+		//{cmd: "1,2m1", cur: cursor{first: 1, second: 2, dot: lc, addrc: 2}, err: ErrInvalidDestination, output: defaultErr},
+		//{cmd: "1m1a", cur: cursor{first: 1, second: 2, dot: 0, addrc: 1}, err: ErrInvalidCmdSuffix, output: defaultErr},
 
 		// P - prompt
-		{cmd: "1P", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
-		{cmd: "Pq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
+		{cmd: "1P", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress, output: defaultErr},
+		{cmd: "Pq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
 
 		// q / q - quit
 		{cmd: "1d", cur: cursor{first: 1, second: 1, dot: 1, addrc: 1}, err: nil},
-		{cmd: "q", cur: cursor{first: 1, second: 1, dot: 1}, keep: true, err: ErrFileModified},
-		{cmd: "qq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
-		{cmd: "1Q", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
-		{cmd: "Qq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
+		{cmd: "q", cur: cursor{first: 1, second: 1, dot: 1}, keep: true, err: ErrFileModified, output: defaultErr},
+		{cmd: "qq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
+		{cmd: "1Q", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress, output: defaultErr},
+		{cmd: "Qq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
 
 		// r - read
-		{cmd: "rq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnexpectedCmdSuffix},
-		{cmd: "r non-existing-file", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrCannotReadFile},
-		{cmd: "r", cur: cursor{first: lc, second: lc, dot: lc}, path: true, err: ErrNoFileName},
-		{cmd: "r !non-existing-binary", cur: cursor{first: lc, second: lc, dot: lc}, err: &exec.Error{}},
-		{cmd: "r !", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrNoCmd},
+		{cmd: "rq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnexpectedCmdSuffix, output: defaultErr},
+		{cmd: "r non-existing-file", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrCannotReadFile, output: defaultErr},
+		{cmd: "r", cur: cursor{first: lc, second: lc, dot: lc}, path: true, err: ErrNoFileName, output: defaultErr},
+		{cmd: "r !non-existing-binary", cur: cursor{first: lc, second: lc, dot: lc}, err: &exec.Error{}, output: defaultErr},
+		{cmd: "r !", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrNoCmd, output: defaultErr},
 		// TODO(thimc): unsuccesful r (read) test with a command suffix. NOTE: I don't even know how to test this.
 
 		// s - substitute
-		{cmd: "spz", cur: cursor{first: slc, second: slc, dot: slc}, err: ErrInvalidCmdSuffix, sub: true},
-		{cmd: ",s", cur: cursor{first: 1, second: slc, dot: slc, addrc: 2}, err: ErrNoPrevPattern, sub: true},
-		{cmd: ",s/A/B/q", cur: cursor{first: 1, second: slc, dot: slc, addrc: 2}, err: ErrInvalidCmdSuffix, sub: true},
-		{cmd: ",s/X/Y/", cur: cursor{first: 1, second: slc, dot: slc, addrc: 2}, err: ErrNoMatch, sub: true},
-		{cmd: ",s//Y/", cur: cursor{first: 1, second: slc, dot: slc, addrc: 2}, err: ErrNoPrevPattern, sub: true},
-		{cmd: "s/(abc/", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, err: &syntax.Error{Code: syntax.ErrorCode("missing closing )"), Expr: "(abc"}},
-		{cmd: ",s/A/%/p", cur: cursor{first: 1, second: slc, dot: slc, addrc: 2}, sub: true, err: ErrNoPreviousSub},
+		{cmd: "spz", cur: cursor{first: slc, second: slc, dot: slc}, err: ErrInvalidCmdSuffix, sub: true, output: defaultErr},
+		{cmd: ",s", cur: cursor{first: 1, second: slc, dot: slc, addrc: 2}, err: ErrNoPrevPattern, sub: true, output: defaultErr},
+		{cmd: ",s/A/B/q", cur: cursor{first: 1, second: slc, dot: slc, addrc: 2}, err: ErrInvalidCmdSuffix, sub: true, output: defaultErr},
+		{cmd: ",s/X/Y/", cur: cursor{first: 1, second: slc, dot: slc, addrc: 2}, err: ErrNoMatch, sub: true, output: defaultErr},
+		{cmd: ",s//Y/", cur: cursor{first: 1, second: slc, dot: slc, addrc: 2}, err: ErrNoPrevPattern, sub: true, output: defaultErr},
+		{cmd: "s/(abc/", cur: cursor{first: lc, second: lc, dot: lc, addrc: 0}, err: &syntax.Error{Code: syntax.ErrorCode("missing closing )"), Expr: "(abc"}, output: defaultErr},
+		{cmd: ",s/A/%/p", cur: cursor{first: 1, second: slc, dot: slc, addrc: 2}, sub: true, err: ErrNoPreviousSub, output: defaultErr},
 
 		// t - transfer
-		{cmd: fmt.Sprintf("%dt5", lc+2), cur: cursor{first: lc, second: lc, dot: lc, addrc: 1}, err: ErrInvalidAddress},
-		{cmd: "1,5tz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrDestinationExpected},
-		{cmd: "1,5t5z", cur: cursor{first: 1, second: 5, dot: lc, addrc: 1}, err: ErrInvalidCmdSuffix},
-
-		// TODO(thimc): transfer test when the file buffer is empty
+		{cmd: fmt.Sprintf("%dt5", lc+2), cur: cursor{first: lc, second: lc, dot: lc, addrc: 1}, err: ErrInvalidAddress, output: defaultErr},
+		{cmd: "1,5tz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrDestinationExpected, output: defaultErr},
+		{cmd: "1,5t5z", cur: cursor{first: 1, second: 5, dot: lc, addrc: 1}, err: ErrInvalidCmdSuffix, output: defaultErr},
+		{cmd: ",d", cur: cursor{first: 1, second: lc, addrc: 2}, buf: []string{}},
+		{cmd: "1t2", cur: cursor{addrc: 1}, keep: true, err: ErrInvalidAddress, output: defaultErr},
 		{cmd: ",d", cur: cursor{first: 1, second: lc, dot: 0, addrc: 2}, err: nil},
-		{cmd: "1,5t2", cur: cursor{addrc: 1}, err: ErrInvalidAddress, keep: true},
+		{cmd: "1,5t2", cur: cursor{addrc: 1}, err: ErrInvalidAddress, keep: true, output: defaultErr},
 
-		// TODO(thimc): undo tests
-		{cmd: "u", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrNothingToUndo},
-		{cmd: "uq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
-		{cmd: "1u", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
+		{cmd: "u", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrNothingToUndo, output: defaultErr},
+		{cmd: "uq", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
+		{cmd: "1u", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnexpectedAddress, output: defaultErr},
 
 		// w - write
-		{cmd: "wz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnexpectedCmdSuffix},
-		{cmd: "w", cur: cursor{first: slc, second: slc, dot: slc}, sub: true, err: ErrNoFileName},
-		// TODO(thimc): wq tests
+		{cmd: "wz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnexpectedCmdSuffix, output: defaultErr},
+		{cmd: "w", cur: cursor{first: slc, second: slc, dot: slc}, sub: true, err: ErrNoFileName, output: defaultErr},
+		{cmd: "wq", cur: cursor{first: slc, second: slc, dot: slc}, sub: true, err: ErrNoFileName, output: defaultErr},
+		{cmd: "Wq", cur: cursor{first: slc, second: slc, dot: slc}, sub: true, err: ErrNoFileName, output: defaultErr},
+		{cmd: "W", cur: cursor{first: slc, second: slc, dot: slc}, sub: true, err: ErrNoFileName, output: defaultErr},
 
 		// z - scroll
-		{cmd: "1z1234567891234567891234567890", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrNumberOutOfRange},
-		{cmd: "z", cur: cursor{first: 1, second: lc + 1, dot: lc}, err: ErrInvalidAddress},
-		{cmd: "5zq", cur: cursor{first: 1, second: 5, dot: lc, addrc: 1}, err: ErrInvalidCmdSuffix},
+		{cmd: "1z1234567891234567891234567890", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrNumberOutOfRange, output: defaultErr},
+		{cmd: "z", cur: cursor{first: 1, second: lc + 1, dot: lc}, err: ErrInvalidAddress, output: defaultErr},
+		{cmd: "5zq", cur: cursor{first: 1, second: 5, dot: lc, addrc: 1}, err: ErrInvalidCmdSuffix, output: defaultErr},
 
 		// = - line count
-		{cmd: "=q", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix},
+		{cmd: "=q", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
 
 		// ! - shell escape
-		{cmd: "!", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrNoCmd},
-		{cmd: "5!", cur: cursor{first: 5, second: 5, dot: lc, addrc: 1}, err: ErrUnexpectedAddress},
-		{cmd: "!nonexistingcommnad", cur: cursor{first: lc, second: lc, dot: lc}, err: &exec.ExitError{}},
-		{cmd: "!echo %", cur: cursor{first: lc, second: lc, dot: lc}, path: true, err: ErrNoFileName},
+		{cmd: "!", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrNoCmd, output: defaultErr},
+		{cmd: "5!", cur: cursor{first: 5, second: 5, dot: lc, addrc: 1}, err: ErrUnexpectedAddress, output: defaultErr},
+		{cmd: "!nonexistingcommnad", cur: cursor{first: lc, second: lc, dot: lc}, err: &exec.ExitError{}, output: defaultErr},
+		{cmd: "!echo %", cur: cursor{first: lc, second: lc, dot: lc}, path: true, err: ErrNoFileName, output: defaultErr},
 
 		// no/unknown command
-		{cmd: "\n", cur: cursor{first: 1, second: lc + 1, dot: lc}, err: ErrInvalidAddress},
-		{cmd: "@", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnknownCmd},
+		{cmd: "\n", cur: cursor{first: 1, second: lc + 1, dot: lc}, err: ErrInvalidAddress, output: defaultErr},
+		{cmd: "@", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnknownCmd, output: defaultErr},
 	}
 
 	var ed *Editor
-	var stdout bytes.Buffer
+	var output bytes.Buffer
 	for _, test := range tests {
 		t.Run(test.cmd, func(t *testing.T) {
-			stdout.Reset()
+			output.Reset()
 			buf := dummy
 			if test.sub {
 				buf = subBuffer
@@ -322,8 +333,8 @@ func TestEditor(t *testing.T) {
 				copy(dummy.lines, dlines)
 				copy(subBuffer.lines, slines)
 				ed = NewEditor(
-					WithStdout(&stdout),
-					WithStderr(io.Discard),
+					WithStdout(&output),
+					WithStderr(&output),
 					withBuffer(buf),
 				)
 			}
@@ -331,7 +342,9 @@ func TestEditor(t *testing.T) {
 			if test.path {
 				ed.file.path = ""
 			}
-			if err := ed.run(); err != test.err {
+			defer func() { recover() }() // allow tests that call os.Exit()
+			err := ed.run()
+			if err != test.err {
 				if xerr, ok := err.(*exec.ExitError); ok {
 					if _, ok := test.err.(*exec.ExitError); ok {
 						// TODO(thimc): compare the actual exit error
@@ -344,14 +357,17 @@ func TestEditor(t *testing.T) {
 					t.Fatalf("want %+v, got %+v", test.err, err)
 				}
 			}
+			if err != nil {
+				ed.errorln(ed.verbose, err)
+			}
+			if output.String() != test.output {
+				t.Fatalf("want stdout/stderr %q, got %q", test.output, output.String())
+			}
 			if test.buf != nil && strings.Join(test.buf, "\n") != strings.Join(ed.file.lines, "\n") {
 				t.Fatalf("want buffer\n%+q\ngot buffer\n%+q", test.buf, ed.file.lines)
 			}
 			if ed.cursor != test.cur {
 				t.Fatalf("want %+v, got %+v", test.cur, ed.cursor)
-			}
-			if stdout.String() != test.output {
-				t.Fatalf("want stdout %q, got %q", test.output, stdout.String())
 			}
 		})
 	}
