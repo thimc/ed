@@ -120,6 +120,7 @@ func TestEditor(t *testing.T) {
 
 		// P - prompt toggle
 		{cmd: "P", cur: cursor{first: lc, second: lc, dot: lc}},
+		{cmd: "p", cur: cursor{first: lc, second: lc, dot: lc}, keep: true, output: DefaultPrompt + "Z\n"},
 
 		// q - quit
 		{cmd: "q", cur: cursor{first: 1, second: 2, dot: 1, addrc: 2}},

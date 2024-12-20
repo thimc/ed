@@ -339,6 +339,9 @@ func cmdPrompt(ed *Editor) error {
 	if err := ed.getSuffix(); err != nil {
 		return err
 	}
+	if ed.up == "" {
+		ed.up = DefaultPrompt
+	}
 	ed.prompt = !ed.prompt
 	return nil
 }

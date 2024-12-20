@@ -118,9 +118,6 @@ func WithPrompt(prompt string) Option {
 	return func(ed *Editor) {
 		ed.up = prompt
 		ed.prompt = ed.up != ""
-		if ed.up == "" {
-			ed.up = DefaultPrompt
-		}
 	}
 }
 
