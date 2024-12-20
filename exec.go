@@ -242,7 +242,7 @@ func cmdInsert(ed *Editor) error {
 	if err := ed.getSuffix(); err != nil {
 		return err
 	}
-	return ed.append(max(ed.second-1, 1))
+	return ed.append(max(ed.second-1, 0))
 }
 
 func cmdJoin(ed *Editor) error {
