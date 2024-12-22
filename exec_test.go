@@ -151,6 +151,15 @@ func TestEditor(t *testing.T) {
 		{cmd: "1,5t3", cur: cursor{first: 1, second: 5, dot: 8, addrc: 1}, output: ""},
 
 		// u - undo
+		{cmd: "v/A/d", cur: cursor{first: 3, second: 3, dot: 2}, sub: true, buf: subBuffer.lines[:2]},
+		{cmd: "u", cur: cursor{first: 2, second: 2, dot: 3}, keep: true, buf: subBuffer.lines},
+		{cmd: "a\nhello\n.\n", cur: cursor{first: lc, second: lc, dot: lc + 1}, buf: append(dummy.lines, []string{"hello"}...)},
+		{cmd: "a\nworld\n.\n", cur: cursor{first: lc + 1, second: lc + 1, dot: lc + 2}, keep: true, buf: append(dummy.lines, []string{"hello", "world"}...)},
+		{cmd: "u\n", cur: cursor{first: lc + 2, second: lc + 2, dot: lc + 1}, keep: true, buf: append(dummy.lines, []string{"hello"}...)},
+		{cmd: "2a\nhello\n.\n", cur: cursor{first: 2, second: 2, dot: 3, addrc: 1}},
+		{cmd: "u\n", cur: cursor{first: 3, second: 3, dot: lc}, keep: true, buf: dummy.lines},
+		{cmd: "2,8d", cur: cursor{first: 2, second: 8, dot: 2, addrc: 2}},
+		{cmd: "u\n", cur: cursor{first: 2, second: 2, dot: lc}, keep: true, buf: dummy.lines},
 
 		// w / wq / W - write
 		{cmd: ",d", cur: cursor{first: 1, second: lc, addrc: 2}},

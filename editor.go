@@ -304,7 +304,7 @@ func (ed *Editor) append(dot int) error {
 		}
 		ed.file.append(dot, []string{ln})
 		dot++
-		ed.undo.append(undoTypeDelete, ed.first, ed.first, dot, ed.file.lines[dot-1:dot])
+		ed.undo.append(undoTypeDelete, cursor{first: dot, second: dot, dot: ed.dot}, ed.file.lines[dot-1:dot])
 		ed.dot = dot
 		ed.dirty = true
 		if ed.script {
@@ -318,7 +318,7 @@ func (ed *Editor) append(dot int) error {
 func (ed *Editor) delete(start, end int) {
 	lines := make([]string, end-start+1)
 	copy(lines, ed.file.lines[start-1:end])
-	ed.undo.append(undoTypeAdd, start, end, ed.dot, lines)
+	ed.undo.append(undoTypeAdd, cursor{first: start, second: end, dot: ed.dot}, lines)
 	ed.file.delete(start, end)
 	ed.dot = start - 1
 	ed.dirty = true
@@ -525,8 +525,8 @@ func (ed *Editor) substitute(re *regexp.Regexp, replace string, nth int) error {
 			}
 			// TODO(thimc): Handle embedded newlines in the replacement string.
 			sb.WriteString(ed.file.lines[i][end:])
-			ed.undo.append(undoTypeAdd, i+1, i+1, ed.dot, []string{ed.file.lines[i]})
-			ed.undo.append(undoTypeDelete, i+1, i+1, ed.dot, []string{sb.String()})
+			ed.undo.append(undoTypeAdd, cursor{first: i + 1, second: i + 1, dot: ed.dot}, []string{ed.file.lines[i]})
+			ed.undo.append(undoTypeDelete, cursor{first: i + 1, second: i + 1, dot: ed.dot}, []string{sb.String()})
 			ed.file.lines[i] = sb.String()
 			ed.dirty = true
 			ed.dot = i + 1
