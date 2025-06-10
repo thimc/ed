@@ -590,10 +590,7 @@ func cmdScroll(ed *Editor) error {
 	if err := ed.getSuffix(); err != nil {
 		return err
 	}
-	scroll := len(ed.file.lines)
-	if ed.second+ed.scroll < len(ed.file.lines) {
-		scroll = ed.second + ed.scroll
-	}
+	scroll := min(ed.second+ed.scroll, len(ed.file.lines))
 	return ed.display(ed.second, scroll, ed.cs)
 }
 
