@@ -128,8 +128,9 @@ func TestEditor(t *testing.T) {
 		{cmd: "Q", cur: cursor{first: 1, second: 2, dot: 1, addrc: 2}, keep: true},
 
 		// r - read
-		{cmd: "r", cur: cursor{first: lc, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", lc*2)},
+		{cmd: "r", cur: cursor{first: lc, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", lc*2), buf: append(dummy.lines, dummy.lines...)},
 		{cmd: fmt.Sprintf("r %s", tmp.Name()), cur: cursor{first: lc, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", lc*2)},
+		{cmd: "r !echo hi", cur: cursor{first: lc, second: lc, dot: 1}, buf: append(dummy.lines, []string{"hi"}...), output: "3\n"},
 
 		// s - substitute
 		{cmd: ",s/A/X/gp", cur: cursor{first: 1, second: slc, dot: 2, addrc: 2}, output: "X X X X X\n", buf: []string{"X X X X X", "X X X X X", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"}, sub: true},
@@ -231,7 +232,6 @@ func TestEditor(t *testing.T) {
 		{cmd: "1x", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrUnknownCmd, output: defaultErr},
 		{cmd: "h", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrUnknownCmd, output: ErrUnknownCmd.Error() + "\n", keep: true},
 
-		// TODO: Fix output
 		// {cmd: "dz", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrInvalidCmdSuffix, output: defaultErr},
 		// {cmd: "h", cur: cursor{first: lc, second: lc, dot: lc}, keep: true, output: ErrInvalidCmdSuffix.Error()},
 
@@ -316,7 +316,7 @@ func TestEditor(t *testing.T) {
 		{cmd: "w /root/no-access", cur: cursor{first: 1, second: lc, dot: lc}, output: defaultErr, err: ErrCannotOpenFile},
 		{cmd: "1d", cur: cursor{first: 1, second: 1, dot: 1, addrc: 1}},
 		{cmd: "Wq", cur: cursor{first: 1, second: lc - 1, dot: 1}, sub: true, err: ErrFileModified, keep: true, output: "50\n" + defaultErr},
-		{cmd: fmt.Sprintf("WQ %s", tmp.Name()), cur: cursor{first: 1, second: lc, dot: lc}, output: "52\n"},
+		{cmd: fmt.Sprintf("WQ %s", tmp.Name()), cur: cursor{first: 1, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", len(dummy.lines))},
 
 		// z - scroll
 		{cmd: "1z1234567891234567891234567890", cur: cursor{first: 1, second: 1, dot: lc, addrc: 1}, err: ErrNumberOutOfRange, output: defaultErr},
