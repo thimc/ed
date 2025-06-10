@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -13,10 +14,11 @@ type cursor struct {
 }
 
 type file struct {
-	dirty bool           // modified state
-	lines []string       // file content
-	mark  ['z' - 'a']int // a to z
-	path  string         // full file path to the file
+	dirty  bool           // modified state
+	binary bool           // TODO(thimc): binary mode; replace any NULL with newline and don't write a trailing \n
+	lines  []string       // file content
+	mark   ['z' - 'a']int // a to z
+	path   string         // full file path to the file
 }
 
 func (f *file) append(dest int, lines []string) {
@@ -36,7 +38,7 @@ func (f *file) delete(start, end int) {
 
 func (f *file) join(start, end int) {
 	buf := strings.Join(f.lines[start-1:end], "")
-	f.lines = append(append(append([]string{}, f.lines[:start-1]...), buf), f.lines[end:]...)
+	f.lines = append(append(slices.Clone(f.lines[:start-1]), buf), f.lines[end:]...)
 }
 
 func (f *file) move(start, end, dest int) int {

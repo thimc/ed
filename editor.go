@@ -83,7 +83,6 @@ type Editor struct {
 	silent  bool           // suppress diagnostics
 	script  bool           // stdin is a file
 	lc      int            // line count (script mode)
-	binary  bool           // TODO(thimc): implement "binary mode" which replaces every NULL character with a newline. When this mode is enabled ed should not append a newline on reading/writing.
 	sigch   chan os.Signal // signal handlers
 
 	cs suffix // command suffix
