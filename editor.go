@@ -268,6 +268,7 @@ func (ed *Editor) read(path string) error {
 	} else {
 		buf, err := os.ReadFile(path)
 		if err != nil {
+			ed.file = file{path: path}
 			return ErrCannotReadFile
 		}
 		lines = strings.Split(strings.TrimSuffix(string(buf), "\n"), "\n")
