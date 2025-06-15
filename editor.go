@@ -272,10 +272,7 @@ func (ed *Editor) read(path string) error {
 			return ErrCannotReadFile
 		}
 		lines = strings.Split(strings.TrimSuffix(string(buf), "\n"), "\n")
-		n := ed.second
-		if n >= len(ed.file.lines) {
-			n = 0
-		}
+		n := min(ed.second, len(ed.file.lines))
 		ed.file = file{
 			lines: append(ed.file.lines[:n], append(lines, ed.file.lines[n:]...)...),
 			path:  path,
@@ -287,9 +284,6 @@ func (ed *Editor) read(path string) error {
 		size += len(ln)
 	}
 	ed.dot = ed.second + len(lines)
-	if ed.dot >= len(ed.file.lines) {
-		ed.dot = len(lines)
-	}
 	if !ed.silent {
 		fmt.Fprintln(ed.stdout, size)
 	}

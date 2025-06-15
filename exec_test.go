@@ -79,8 +79,8 @@ func TestEditor(t *testing.T) {
 		{cmd: "d", cur: cursor{first: lc, second: lc, dot: lc - 1}},
 
 		// e / E - edit
-		{cmd: fmt.Sprintf("e %s", tmp.Name()), cur: cursor{first: lc, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", lc*2)},
-		{cmd: fmt.Sprintf("E %s", tmp.Name()), cur: cursor{first: lc, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", lc*2), keep: true},
+		{cmd: fmt.Sprintf("e %s", tmp.Name()), cur: cursor{first: lc, second: lc, dot: lc * 2}, output: fmt.Sprintf("%d\n", lc*2)},
+		{cmd: fmt.Sprintf("E %s", tmp.Name()), cur: cursor{first: lc * 2, second: lc * 2, dot: lc * 3}, output: fmt.Sprintf("%d\n", lc*2), keep: true},
 
 		// f - file name
 		{cmd: "f", cur: cursor{first: lc, second: lc, dot: lc}, output: dummy.path + "\n"},
@@ -128,9 +128,9 @@ func TestEditor(t *testing.T) {
 		{cmd: "Q", cur: cursor{first: 1, second: 2, dot: 1, addrc: 2}, keep: true},
 
 		// r - read
-		{cmd: "r", cur: cursor{first: lc, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", lc*2), buf: append(dummy.lines, dummy.lines...)},
-		{cmd: fmt.Sprintf("r %s", tmp.Name()), cur: cursor{first: lc, second: lc, dot: lc}, output: fmt.Sprintf("%d\n", lc*2)},
-		{cmd: "r !echo hi", cur: cursor{first: lc, second: lc, dot: 1}, buf: append(dummy.lines, []string{"hi"}...), output: "3\n"},
+		{cmd: "r", cur: cursor{first: lc, second: lc, dot: lc * 2}, output: fmt.Sprintf("%d\n", lc*2), buf: append(dummy.lines, dummy.lines...)},
+		{cmd: fmt.Sprintf("r %s", tmp.Name()), cur: cursor{first: lc, second: lc, dot: lc * 2}, output: fmt.Sprintf("%d\n", lc*2)},
+		{cmd: "r !echo ab", cur: cursor{first: lc, second: lc, dot: lc + 1}, buf: append(dummy.lines, []string{"ab"}...), output: "3\n"},
 
 		// s - substitute
 		{cmd: ",s/A/X/gp", cur: cursor{first: 1, second: slc, dot: 2, addrc: 2}, output: "X X X X X\n", buf: []string{"X X X X X", "X X X X X", "B B B B B", "B B B B B", "C C C C C", "C C C C C", "D D D D D", "D D D D D"}, sub: true},
@@ -282,6 +282,8 @@ func TestEditor(t *testing.T) {
 		{cmd: "r", cur: cursor{first: lc, second: lc, dot: lc}, path: true, err: ErrNoFileName, output: defaultErr},
 		{cmd: "r !non-existing-binary", cur: cursor{first: lc, second: lc, dot: lc}, err: &exec.Error{}, output: defaultErr},
 		{cmd: "r !", cur: cursor{first: lc, second: lc, dot: lc}, err: ErrNoCmd, output: defaultErr},
+		{cmd: "2r !echo hi", cur: cursor{first: 2, second: 2, dot: 3, addrc: 1}, output: "3\n", buf: append(dummy.lines[:2], append([]string{"hi"}, dummy.lines[2:]...)...)},
+		{cmd: "r !echo hi", cur: cursor{first: lc, second: lc, dot: lc + 1}, output: "3\n", buf: append(dummy.lines, "hi")},
 		// TODO(thimc): unsuccesful r (read) test with a command suffix. NOTE: I don't even know how to test this.
 
 		// s - substitute
